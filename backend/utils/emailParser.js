@@ -1,5 +1,7 @@
 const simpleParser = require('mailparser').simpleParser;
 const { Base64 } = require('js-base64');
+const pdf = require('pdf-parse');
+const mammoth = require('mammoth');
 
 const parseEmail = async (emailData) => {
   try {
@@ -22,7 +24,8 @@ const parseEmail = async (emailData) => {
 
     const parsedEmail = await simpleParser(emailBody);
 
-    return {
+    const resumeAttachment = findResumeAttachment(attachments);
+    let returnObject = {
       subject,
       applicantName,
       applicantEmail,
@@ -30,6 +33,14 @@ const parseEmail = async (emailData) => {
       htmlBody: parsedEmail.html,
       attachments
     };
+    if (resumeAttachment) {
+      const resumeText = await extractTextFromAttachment(resumeAttachment);
+      returnObject = {
+        ...returnObject,
+        resumeText
+      };
+    }
+    return returnObject;
   } catch (error) {
     console.error('Error parsing email:', error);
     throw new Error('Failed to parse email');
@@ -83,6 +94,21 @@ const isResumeFile = (filename) => {
 
 const findResumeAttachment = (attachments) => {
   return attachments.find(attachment => isResumeFile(attachment.filename));
+};
+
+const extractTextFromAttachment = async (attachment) => {
+  if (attachment.mimeType === 'application/pdf') {
+    const dataBuffer = Buffer.from(attachment.data, 'base64');
+    const pdfData = await pdf(dataBuffer);
+    return pdfData.text;
+  } else if (attachment.mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+    const dataBuffer = Buffer.from(attachment.data, 'base64');
+    const result = await mammoth.extractRawText({buffer: dataBuffer});
+    return result.value;
+  } else if (attachment.mimeType === 'text/plain') {
+    return Buffer.from(attachment.data, 'base64').toString('utf-8');
+  }
+  throw new Error('Unsupported file type');
 };
 
 module.exports = { parseEmail, findResumeAttachment };

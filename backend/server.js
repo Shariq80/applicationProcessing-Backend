@@ -1,103 +1,58 @@
 require('dotenv').config();
-const express = require('express');
-const mongoose = require('mongoose');
-const cors = require('cors');
-const { passport } = require('./config/auth');
-const errorMiddleware = require('./middleware/errorMiddleware');
-const jwt = require('jsonwebtoken');
-const Job = require('./models/Job');
-const Application = require('./models/Application');
-const User = require('./models/User');
+console.log('Environment variables loaded');
+console.log('GOOGLE_CLIENT_ID:', process.env.GOOGLE_CLIENT_ID);
 
+// Temporary: manually set environment variables if they're not loaded
+process.env.GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || 'your_client_id_here';
+process.env.GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || 'your_client_secret_here';
+process.env.GOOGLE_CALLBACK_URL = process.env.GOOGLE_CALLBACK_URL || 'http://localhost:5000/api/auth/google/callback';
+
+const express = require('express');
+const session = require('express-session');
+const passport = require('passport');
+const cors = require('cors');
+const connectDB = require('./config/database');
+const authRoutes = require('./routes/authRoutes');
+const jobRoutes = require('./routes/jobRoutes');
+const applicationRoutes = require('./routes/applicationRoutes');
+const emailRoutes = require('./routes/emailRoutes');
+
+// Initialize express app
 const app = express();
+
+// Connect to database
+connectDB();
 
 // Middleware
 app.use(cors());
 app.use(express.json());
+app.use(express.urlencoded({ extended: false }));
 
-// Passport middleware
+// Session configuration
+app.use(session({
+  secret: process.env.SESSION_SECRET || 'your_session_secret',
+  resave: false,
+  saveUninitialized: false
+}));
+
+// Initialize Passport
 app.use(passport.initialize());
+app.use(passport.session());
 
-// Connect to MongoDB
-mongoose.connect(process.env.MONGODB_URI, {
-  useNewUrlParser: true,
-  useUnifiedTopology: true,
-})
-.then(() => console.log('Connected to MongoDB'))
-.catch((err) => console.error('MongoDB connection error:', err));
-
-// JWT middleware
-const authenticateToken = (req, res, next) => {
-  const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1];
-
-  if (token == null) return res.sendStatus(401);
-
-  jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
-    if (err) return res.sendStatus(403);
-    req.user = user;
-    next();
-  });
-};
+// Passport configuration
+require('./config/auth');
 
 // Routes
-app.use('/api/auth', require('./routes/authRoutes'));
-app.use('/api/applications', require('./routes/applicationRoutes'));
-app.use('/api/emails', require('./routes/emailRoutes'));
-
-// Protected jobs route
-app.get('/jobs', authenticateToken, async (req, res) => {
-  try {
-    const jobs = await Job.find();
-    res.json(jobs);
-  } catch (error) {
-    res.status(500).json({ message: 'Error fetching jobs', error: error.message });
-  }
-});
-
-// Route for updating a job
-app.put('/jobs/:id', authenticateToken, async (req, res) => {
-  try {
-    const updatedJob = await Job.findByIdAndUpdate(req.params.id, req.body, { new: true });
-    if (!updatedJob) {
-      return res.status(404).json({ message: 'Job not found' });
-    }
-    res.json(updatedJob);
-  } catch (error) {
-    res.status(500).json({ message: 'Error updating job', error: error.message });
-  }
-});
-
-// Route for processing applications
-app.post('/process-applications', authenticateToken, async (req, res) => {
-  const { jobId } = req.body;
-  
-  try {
-    const job = await Job.findById(jobId);
-    if (!job) {
-      return res.status(404).json({ message: 'Job not found' });
-    }
-
-    // Fetch unprocessed applications for this job
-    const applications = await Application.find({ jobId, processed: false });
-
-    // Process each application (this is where you'd implement your AI matching logic)
-    for (let app of applications) {
-      // Example: Simple random score assignment
-      app.score = Math.floor(Math.random() * 100);
-      app.processed = true;
-      await app.save();
-    }
-
-    res.json({ message: `Processed ${applications.length} applications` });
-  } catch (error) {
-    console.error('Error processing applications:', error);
-    res.status(500).json({ message: 'Error processing applications' });
-  }
-});
+app.use('/api/auth', authRoutes);
+app.use('/api/jobs', jobRoutes);
+app.use('/api/applications', applicationRoutes);
+app.use('/api/emails', emailRoutes);
 
 // Error handling middleware
-app.use(errorMiddleware);
+app.use((err, req, res, next) => {
+  console.error(err.stack);
+  res.status(500).send('Something broke!');
+});
 
 // Start the server
 const PORT = process.env.PORT || 5000;

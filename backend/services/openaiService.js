@@ -36,7 +36,7 @@ Missing Skills:
   const response = await openai.completions.create({
     model: "text-davinci-002",
     prompt: prompt,
-    max_tokens: 200,
+    max_tokens: 300,
     n: 1,
     stop: null,
     temperature: 0.5,

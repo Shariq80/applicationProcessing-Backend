@@ -4,6 +4,6 @@ const { fetchAndProcessEmails } = require('../controllers/emailController');
 
 const router = express.Router();
 
-router.post('/fetch/:jobId', protect, fetchAndProcessEmails);
+router.get('/fetch/:jobId', protect, fetchAndProcessEmails);
 
 module.exports = router;
