@@ -21,6 +21,7 @@ const generateToken = (id) => {
 const login = async (req, res) => {
   try {
     const { email, password } = req.body;
+    console.log('Login attempt for:', email);
     
     if (!email || !password) {
       return res.status(400).json({ message: 'Please provide email and password' });
@@ -28,16 +29,18 @@ const login = async (req, res) => {
 
     const user = await User.findOne({ email });
     if (!user) {
-      return res.status(401).json({ message: 'Invalid credentials' });
+      console.log('User not found:', email);
+      return res.status(401).json({ message: 'Invalid email or password' });
     }
 
     const isMatch = await user.comparePassword(password);
     if (!isMatch) {
-      return res.status(401).json({ message: 'Invalid credentials' });
+      console.log('Password mismatch for user:', email);
+      return res.status(401).json({ message: 'Invalid email or password' });
     }
 
-    // Use the generateToken function here
     const token = generateToken(user._id);
+    console.log('Login successful for:', email);
     res.json({
       _id: user._id,
       name: user.name,
@@ -46,7 +49,7 @@ const login = async (req, res) => {
     });
   } catch (error) {
     console.error('Login error:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    res.status(500).json({ message: 'An error occurred during login', error: error.message });
   }
 };
 

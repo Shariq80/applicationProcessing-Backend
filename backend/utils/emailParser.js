@@ -3,12 +3,14 @@ const { Base64 } = require('js-base64');
 const pdf = require('pdf-parse');
 const mammoth = require('mammoth');
 
-const parseEmail = async (emailData) => {
+const parseEmail = async (emailData, jobTitle) => {
   try {
     const headers = emailData.payload.headers;
     const from = headers.find(header => header.name.toLowerCase() === 'from').value;
+    const subject = headers.find(header => header.name.toLowerCase() === 'subject').value;
 
     const applicantEmail = extractEmail(from);
+    const extractedJobTitle = extractJobTitle(subject, jobTitle);
 
     let emailBody = '';
     let attachments = [];
@@ -37,6 +39,7 @@ const parseEmail = async (emailData) => {
     return {
       applicantEmail,
       resumeText,
+      extractedJobTitle,
     };
   } catch (error) {
     console.error('Error parsing email:', error);
@@ -115,6 +118,13 @@ const extractTextFromAttachment = async (attachment) => {
     console.error('Error extracting text from attachment:', error);
     return null;  // Return null if extraction fails
   }
+};
+
+const extractJobTitle = (subject, jobTitle) => {
+  const words = jobTitle.toLowerCase().split(' ');
+  const regex = new RegExp(words.map(word => `(?=.*\\b${word}\\b)`).join(''), 'i');
+  const match = subject.match(regex);
+  return match ? match.input : null;
 };
 
 module.exports = { parseEmail };
