@@ -1,30 +1,22 @@
 const mongoose = require('mongoose');
 
 const applicationSchema = new mongoose.Schema({
-  jobId: {
+  job: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Job',
-    required: true,
-  },
-  applicantName: {
-    type: String,
     required: true,
   },
   applicantEmail: {
     type: String,
     required: true,
   },
-  resumeUrl: {
+  resumeText: {
     type: String,
     required: true,
   },
-  processed: {
-    type: Boolean,
-    default: false,
-  },
   score: {
     type: Number,
-    default: 0,
+    required: true,
   },
   summary: {
     type: String,
@@ -37,6 +29,11 @@ const applicationSchema = new mongoose.Schema({
     type: String,
     enum: ['pending', 'shortlisted', 'rejected'],
     default: 'pending',
+  },
+  processedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: true,
   },
 }, { timestamps: true });
 

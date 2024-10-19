@@ -3,7 +3,8 @@ const OpenAI = require('openai');
 const openai = new OpenAI(process.env.OPENAI_API_KEY);
 
 const processResume = async (resumeText, jobDescription) => {
-  const prompt = `You are a recruiter assessing the attached resume against the provided job description. Analyze the resume objectively, highlighting matches and achievements, as well as missing aspects.
+  try {
+    const prompt = `You are a recruiter assessing the attached resume against the provided job description. Analyze the resume objectively, highlighting matches and achievements, as well as missing aspects.
 Consider the following parameters, with more weight given to critical parameters like industry relevance, key skills, and years of experience:
 
 1. Key Skills: Exact match with the job description (JD) should get the highest weight. Penalize for skills not listed from the JD or irrelevant skills.
@@ -33,25 +34,44 @@ Missing Skills:
 - [skill 3]
 `;
 
-  const response = await openai.completions.create({
-    model: "text-davinci-002",
-    prompt: prompt,
-    max_tokens: 300,
-    n: 1,
-    stop: null,
-    temperature: 0.5,
-  });
+    const response = await openai.chat.completions.create({
+      model: "gpt-3.5-turbo",
+      messages: [
+        { role: "system", content: "You are a helpful assistant that analyzes resumes." },
+        { role: "user", content: prompt }
+      ],
+      max_tokens: 300,
+      n: 1,
+      temperature: 0.5,
+    });
 
-  const result = response.choices[0].text.trim();
-  const [scorePart, summaryPart, ...skillsParts] = result.split('\n');
+    const analysis = response.choices[0].message.content;
+    const [score, summary, missingSkills] = parseAnalysis(analysis);
 
-  const score = parseInt(scorePart.split(':')[1].trim());
-  const summary = summaryPart.split(':')[1].trim();
-  const missingSkills = skillsParts
-    .filter(part => part.startsWith('-'))
-    .map(part => part.slice(1).trim());
+    return { score, summary, missingSkills };
+  } catch (error) {
+    console.error('Error processing resume with OpenAI:', error);
+    throw error;
+  }
+};
 
-  return { score, summary, missingSkills };
+const parseAnalysis = (analysis) => {
+  const lines = analysis.split('\n');
+  let score = 0;
+  let summary = '';
+  let missingSkills = [];
+
+  for (const line of lines) {
+    if (line.startsWith('Score:')) {
+      score = parseInt(line.split(':')[1].trim());
+    } else if (line.startsWith('Summary:')) {
+      summary = line.split(':')[1].trim();
+    } else if (line.startsWith('- ')) {
+      missingSkills.push(line.substring(2).trim());
+    }
+  }
+
+  return [score, summary, missingSkills];
 };
 
 module.exports = { processResume };

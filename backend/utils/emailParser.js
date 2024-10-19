@@ -6,10 +6,8 @@ const mammoth = require('mammoth');
 const parseEmail = async (emailData) => {
   try {
     const headers = emailData.payload.headers;
-    const subject = headers.find(header => header.name.toLowerCase() === 'subject').value;
     const from = headers.find(header => header.name.toLowerCase() === 'from').value;
 
-    const applicantName = extractName(from);
     const applicantEmail = extractEmail(from);
 
     let emailBody = '';
@@ -25,25 +23,24 @@ const parseEmail = async (emailData) => {
     const parsedEmail = await simpleParser(emailBody);
 
     const resumeAttachment = findResumeAttachment(attachments);
-    let returnObject = {
-      subject,
-      applicantName,
-      applicantEmail,
-      emailBody: parsedEmail.text,
-      htmlBody: parsedEmail.html,
-      attachments
-    };
+    let resumeText = '';
     if (resumeAttachment) {
-      const resumeText = await extractTextFromAttachment(resumeAttachment);
-      returnObject = {
-        ...returnObject,
-        resumeText
-      };
+      console.log('Resume attachment found:', resumeAttachment.filename);
+      resumeText = await extractTextFromAttachment(resumeAttachment);
     }
-    return returnObject;
+
+    if (!resumeText) {
+      console.log('Using email body as resume text');
+      resumeText = parsedEmail.text;
+    }
+
+    return {
+      applicantEmail,
+      resumeText,
+    };
   } catch (error) {
     console.error('Error parsing email:', error);
-    throw new Error('Failed to parse email');
+    throw new Error('Failed to parse email: ' + error.message);
   }
 };
 
@@ -97,18 +94,27 @@ const findResumeAttachment = (attachments) => {
 };
 
 const extractTextFromAttachment = async (attachment) => {
-  if (attachment.mimeType === 'application/pdf') {
-    const dataBuffer = Buffer.from(attachment.data, 'base64');
-    const pdfData = await pdf(dataBuffer);
-    return pdfData.text;
-  } else if (attachment.mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
-    const dataBuffer = Buffer.from(attachment.data, 'base64');
-    const result = await mammoth.extractRawText({buffer: dataBuffer});
-    return result.value;
-  } else if (attachment.mimeType === 'text/plain') {
-    return Buffer.from(attachment.data, 'base64').toString('utf-8');
+  if (!attachment || !attachment.data) {
+    console.log('No attachment data found');
+    return null;  // Return null instead of an empty string
   }
-  throw new Error('Unsupported file type');
+
+  const buffer = Buffer.from(attachment.data, 'base64');
+  
+  try {
+    if (attachment.mimeType === 'application/pdf') {
+      const data = await pdf(buffer);
+      return data.text;
+    } else if (attachment.mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+      const result = await mammoth.extractRawText({ buffer });
+      return result.value;
+    } else {
+      return buffer.toString('utf8');
+    }
+  } catch (error) {
+    console.error('Error extracting text from attachment:', error);
+    return null;  // Return null if extraction fails
+  }
 };
 
-module.exports = { parseEmail, findResumeAttachment };
+module.exports = { parseEmail };
