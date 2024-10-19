@@ -1,0 +1,37 @@
+{
+  "name": "applicationprocessing-backend",
+  "version": "1.0.0",
+  "description": "",
+  "main": "server.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node server.js",
+    "dev": "nodemon server.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "nodemon": "^3.1.7"
+  },
+  "dependencies": {
+    "applicationprocessing-backend": "file:",
+    "bcrypt": "^5.1.1",
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.1",
+    "express-session": "^1.18.1",
+    "google-auth-library": "^9.14.2",
+    "googleapis": "^144.0.0",
+    "js-base64": "^3.7.7",
+    "jsonwebtoken": "^9.0.2",
+    "mailparser": "^3.7.1",
+    "mailparser-mit": "^1.0.0",
+    "mongoose": "^8.7.2",
+    "nodemailer": "^6.9.15",
+    "openai": "^4.68.0",
+    "passport": "^0.7.0",
+    "passport-google-oauth20": "^2.0.0"
+  }
+}
