@@ -4,7 +4,7 @@ const Job = require('../models/Job');
 const getApplications = async (req, res) => {
   try {
     const { jobId } = req.params;
-    const job = await Job.findOne({ _id: jobId, hr: req.user._id });
+    const job = await Job.findById(jobId);
     if (!job) {
       return res.status(404).json({ message: 'Job not found' });
     }

@@ -129,10 +129,18 @@ const extractTextFromAttachment = async (attachment) => {
 };
 
 const extractJobTitle = (subject, jobTitle) => {
-  const words = jobTitle.toLowerCase().split(' ');
-  const regex = new RegExp(words.map(word => `(?=.*\\b${word}\\b)`).join(''), 'i');
-  const match = subject.match(regex);
-  return match ? match.input : null;
+  const subjectLower = subject.toLowerCase();
+  const jobTitleLower = jobTitle.toLowerCase();
+  if (subjectLower.includes(jobTitleLower)) {
+    return jobTitle;
+  }
+  const words = jobTitleLower.split(' ');
+  for (let i = 0; i < words.length; i++) {
+    if (subjectLower.includes(words[i])) {
+      return jobTitle;
+    }
+  }
+  return null;
 };
 
 module.exports = { parseEmail };

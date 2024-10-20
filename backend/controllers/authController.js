@@ -13,7 +13,7 @@ const client = new OAuth2Client(
 
 // Add this function at the top of your file
 const generateToken = (id) => {
-  return jwt.sign({ id }, process.env.JWT_SECRET, {
+  return jwt.sign({ userId: id }, process.env.JWT_SECRET, {
     expiresIn: '30d',
   });
 };
@@ -57,7 +57,7 @@ const googleAuth = (req, res) => {
   const oAuth2Client = new OAuth2Client(
     process.env.GOOGLE_CLIENT_ID,
     process.env.GOOGLE_CLIENT_SECRET,
-    process.env.GOOGLE_CALLBACK_URL
+    process.env.GOOGLE_REDIRECT_URI
   );
 
   const scopes = [
@@ -69,7 +69,8 @@ const googleAuth = (req, res) => {
   const authorizationUrl = oAuth2Client.generateAuthUrl({
     access_type: 'offline',
     scope: scopes,
-    include_granted_scopes: true
+    include_granted_scopes: true,
+    prompt: 'consent'
   });
 
   res.json({ url: authorizationUrl });
@@ -82,7 +83,7 @@ const googleCallback = async (req, res) => {
     const oAuth2Client = new OAuth2Client(
       process.env.GOOGLE_CLIENT_ID,
       process.env.GOOGLE_CLIENT_SECRET,
-      process.env.GOOGLE_CALLBACK_URL
+      process.env.GOOGLE_REDIRECT_URI
     );
 
     const { tokens } = await oAuth2Client.getToken(code);
@@ -115,18 +116,10 @@ const googleCallback = async (req, res) => {
 
     const jwtToken = generateToken(user._id);
 
-    res.json({
-      message: 'Google authentication successful',
-      user: {
-        _id: user._id,
-        name: user.name,
-        email: user.email,
-      },
-      token: jwtToken,
-    });
+    res.redirect(`${process.env.FRONTEND_URL}/auth-callback?token=${jwtToken}`);
   } catch (error) {
     console.error('Error in Google callback:', error);
-    res.status(500).json({ error: 'Failed to process Google OAuth', details: error.message });
+    res.redirect(`${process.env.FRONTEND_URL}/auth-error`);
   }
 };
 

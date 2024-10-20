@@ -1,13 +1,19 @@
 const Job = require('../models/Job');
+const User = require('../models/User');
 
 const createJob = async (req, res) => {
   try {
     const { title, description } = req.body;
-    const job = await Job.create({
+    const job = new Job({
       title,
       description,
-      hr: req.user._id,
+      createdBy: req.user._id
     });
+    await job.save();
+    
+    // Add job to user's jobs array
+    await User.findByIdAndUpdate(req.user._id, { $push: { jobs: job._id } });
+
     res.status(201).json(job);
   } catch (error) {
     res.status(400).json({ message: error.message });
@@ -16,7 +22,7 @@ const createJob = async (req, res) => {
 
 const getJobs = async (req, res) => {
   try {
-    const jobs = await Job.find({ hr: req.user._id });
+    const jobs = await Job.find({ createdBy: req.user._id });
     res.json(jobs);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -28,7 +34,7 @@ const updateJob = async (req, res) => {
     const { id } = req.params;
     const { title, description, active } = req.body;
     const job = await Job.findOneAndUpdate(
-      { _id: id, hr: req.user._id },
+      { _id: id, createdBy: req.user._id },
       { title, description, active },
       { new: true }
     );
@@ -44,7 +50,7 @@ const updateJob = async (req, res) => {
 const deleteJob = async (req, res) => {
   try {
     const { id } = req.params;
-    const job = await Job.findOneAndDelete({ _id: id, hr: req.user._id });
+    const job = await Job.findOneAndDelete({ _id: id, createdBy: req.user._id });
     if (!job) {
       return res.status(404).json({ message: 'Job not found' });
     }

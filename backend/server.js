@@ -16,6 +16,10 @@ const applicationRoutes = require('./routes/applicationRoutes');
 const emailRoutes = require('./routes/emailRoutes');
 const errorMiddleware = require('./middleware/errorMiddleware');
 const dashboardRoutes = require('./routes/dashboardRoutes');
+const rateLimit = require('express-rate-limit');
+const cron = require('node-cron');
+const { fetchAndProcessEmails } = require('./controllers/emailController');
+const logger = require('./utils/logger');
 
 // Initialize express app
 const app = express();
@@ -64,3 +68,19 @@ app.use((req, res) => {
 // Start the server
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100 // limit each IP to 100 requests per windowMs
+});
+
+app.use('/api', limiter);
+
+// Add this after your route definitions
+cron.schedule('*/30 * * * *', async () => {
+  console.log('Running email processing job');
+  await fetchAndProcessEmails();
+});
+
+// Add this line after connecting to the database
+logger.info('Logging initialized');

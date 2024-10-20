@@ -2,28 +2,32 @@ const OpenAI = require('openai');
 
 const openai = new OpenAI(process.env.OPENAI_API_KEY);
 
+const truncateText = (text, maxLength = 4000) => {
+  if (text.length <= maxLength) return text;
+  return text.slice(0, maxLength) + '...';
+};
+
 const processResume = async (resumeText, jobDescription) => {
   try {
-    const prompt = `You are a recruiter assessing the attached resume against the provided job description. Analyze the resume objectively, highlighting matches and achievements, as well as missing aspects.
-Consider the following parameters, with more weight given to critical parameters like industry relevance, key skills, and years of experience:
+    const prompt = `Please analyze the attached resume against the job description:
 
-1. Key Skills: Exact match with the job description (JD) should get the highest weight. Penalize for skills not listed from the JD or irrelevant skills.
-2. Academic Qualifications: Compare the required qualifications with actual qualifications. Lower the score for qualifications that are not relevant to the field.
-3. Achievements: Focus only on achievements directly related to the JD.
-4. Responsibilities: Match the responsibilities listed in the JD with those in the resume. Responsibilities not listed from the JD should penalize the score.
-5. Years of Experience: Exact experience in the required field and technologies is critical. Penalize if the experience is in a different field or irrelevant technology.
-6. Industry: Relevance of the candidate's industry experience to the job opening is crucial. If the candidate has no relevant industry experience, the score should be low.
+Key Skills: Match with JD gets top priority. Penalize missing or irrelevant skills.
+Education: Reduce points if the candidate's education is irrelevant to the field.
+Achievements: Focus on JD-related accomplishments.
+Responsibilities: Compare listed duties with JD.
+Experience: Assess experience in required technologies.
+Industry Fit: Check relevance to the industry.
 
-Provide the following in your response:
-1. A single digit numeric overall score from 1 to 10, where 1 is no match and 10 is a perfect match.
-2. A 3-4 line summary of the resume against the job description, indicating whether the education and experience are relevant or not.
-3. A bullet-point list of key skills or qualifications missing from the candidate's resume that are listed in the job description.
+Provide:
+A score from 1 to 10.
+A 2-3 line summary of fit with JD.
+A list of missing key skills or qualifications.
 
 Job Description:
 ${jobDescription}
 
 Resume:
-${resumeText}
+${truncateText(resumeText)}
 
 Response Format:
 Score: [single digit numeric score]
@@ -35,12 +39,12 @@ Missing Skills:
 `;
 
     const response = await openai.chat.completions.create({
-      model: "gpt-3.5-turbo",
+      model: "gpt-3.5-turbo-16k",
       messages: [
         { role: "system", content: "You are a helpful assistant that analyzes resumes." },
         { role: "user", content: prompt }
       ],
-      max_tokens: 300,
+      max_tokens: 500,
       n: 1,
       temperature: 0.5,
     });

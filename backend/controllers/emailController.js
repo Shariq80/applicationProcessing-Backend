@@ -8,9 +8,10 @@ const User = require('../models/User');
 const GoogleCredential = require('../models/GoogleCredential');
 
 const fetchOAuthCredentialsFromDB = async () => {
-  // Implement the logic to fetch OAuth credentials from your database
-  // For example:
-  const credential = await GoogleCredential.findOne();
+  const credential = await GoogleCredential.findOne().sort({ createdAt: -1 });
+  if (!credential) {
+    throw new Error('No Google credentials found in the database');
+  }
   return credential;
 };
 
@@ -18,34 +19,43 @@ const fetchAndProcessEmails = async (req, res) => {
   try {
     const { jobId } = req.params;
     
-    // Fetch OAuth credentials from your database
     const oauthCredentials = await fetchOAuthCredentialsFromDB();
+    console.log('OAuth credentials fetched:', oauthCredentials);
 
-    const oauth2Client = new OAuth2(
+    if (!oauthCredentials || !oauthCredentials.refreshToken) {
+      throw new Error('No valid OAuth credentials found');
+    }
+
+    const oauth2Client = new google.auth.OAuth2(
       process.env.GOOGLE_CLIENT_ID,
       process.env.GOOGLE_CLIENT_SECRET,
       process.env.GOOGLE_REDIRECT_URI
     );
-
     oauth2Client.setCredentials({
       refresh_token: oauthCredentials.refreshToken
     });
 
-    // Get a new access token
-    const { token } = await oauth2Client.getAccessToken();
+    try {
+      const { token } = await oauth2Client.getAccessToken();
+      console.log('New access token obtained:', token);
+    } catch (tokenError) {
+      console.error('Error getting access token:', tokenError);
+      throw new Error('Failed to get access token: ' + tokenError.message);
+    }
 
     const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
 
     const user = await User.findById(req.user._id);
-    const job = await Job.findOne({ _id: jobId, hr: user._id, active: true });
-
+    const job = await Job.findById(jobId);
     if (!job) {
-      throw new Error('Active job not found');
+      throw new Error('Job not found');
     }
+
+    console.log('Searching for job with ID:', jobId);
 
     const response = await gmail.users.messages.list({
       userId: 'me',
-      q: `subject:(${job.title.split(' ').join(' OR ')})`,
+      q: 'is:unread',
     });
 
     const messages = response.data.messages || [];
@@ -60,17 +70,23 @@ const fetchAndProcessEmails = async (req, res) => {
 
         const { applicantEmail, resumeText, extractedJobTitle, attachments } = await parseEmail(email.data, job.title, gmail, message.id);
 
-        if (!resumeText) {
-          console.log(`No resume text found for email ${message.id}`);
-          continue;  // Skip this email and move to the next one
+        if (!resumeText || !extractedJobTitle) {
+          console.log(`Skipping email ${message.id}: No resume text or job title not found`);
+          continue;
         }
 
-        if (!extractedJobTitle) {
-          console.log(`Job title not found in subject for email ${message.id}`);
-          continue;  // Skip this email and move to the next one
+        let processedResult;
+        try {
+          processedResult = await processResume(resumeText, job.description);
+        } catch (openaiError) {
+          console.error('Error processing resume with OpenAI:', openaiError);
+          if (openaiError.code === 'insufficient_quota') {
+            throw openaiError; // Re-throw to stop processing all emails
+          }
+          continue; // Skip this email and continue with the next one
         }
 
-        const { score, summary, missingSkills } = await processResume(resumeText, job.description);
+        const { score, summary, missingSkills } = processedResult;
 
         const application = await Application.create({
           job: job._id,
@@ -83,25 +99,33 @@ const fetchAndProcessEmails = async (req, res) => {
           attachments: attachments.map(att => ({
             filename: att.filename,
             contentType: att.mimeType,
-            data: att.data // This should already be a Buffer
+            data: att.data
           }))
         });
 
-        console.log(`Application created with ${application.attachments.length} attachments`);
-        application.attachments.forEach((att, index) => {
-          console.log(`Attachment ${index}: ${att.filename}, ${att.contentType}, Data length: ${att.data.length}`);
+        processedApplications.push(application);
+
+        // Mark the email as read
+        await gmail.users.messages.modify({
+          userId: 'me',
+          id: message.id,
+          requestBody: {
+            removeLabelIds: ['UNREAD']
+          }
         });
 
-        processedApplications.push(application);
+        console.log(`Processed and marked as read: ${message.id}`);
       } catch (error) {
+        if (error.code === 'insufficient_quota') {
+          throw error; // Re-throw to stop processing all emails
+        }
         console.error(`Error processing email ${message.id}:`, error);
-        // Continue to the next email instead of stopping the entire process
       }
     }
 
     res.json({ success: true, message: 'Emails processed successfully', applications: processedApplications });
   } catch (error) {
-    console.error('Error fetching and processing emails:', error);
+    console.error('Detailed error in fetchAndProcessEmails:', error);
     res.status(500).json({ success: false, message: 'Failed to process emails', error: error.message });
   }
 };
