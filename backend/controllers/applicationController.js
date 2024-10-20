@@ -19,16 +19,20 @@ const updateApplicationStatus = async (req, res) => {
   try {
     const { id } = req.params;
     const { status } = req.body;
+    
     const application = await Application.findById(id);
     if (!application) {
       return res.status(404).json({ message: 'Application not found' });
     }
+    
     const job = await Job.findOne({ _id: application.job, hr: req.user._id });
     if (!job) {
       return res.status(403).json({ message: 'Not authorized' });
     }
+    
     application.status = status;
     await application.save();
+    
     res.json(application);
   } catch (error) {
     res.status(400).json({ message: error.message });

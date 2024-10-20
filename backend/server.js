@@ -55,6 +55,12 @@ app.use('/api/dashboard', dashboardRoutes);
 // Error handling middleware
 app.use(errorMiddleware);
 
+// Catch-all route for unmatched requests
+app.use((req, res) => {
+  console.log('Unmatched route:', req.method, req.url);
+  res.status(404).send('Route not found');
+});
+
 // Start the server
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));

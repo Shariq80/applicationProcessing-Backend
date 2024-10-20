@@ -4,16 +4,11 @@ const { fetchAndProcessEmails } = require('../controllers/emailController');
 
 const router = express.Router();
 
-router.get('/fetch/:jobId', protect, async (req, res) => {
-  try {
-    const { jobId } = req.params;
-    console.log('Processing emails for job:', jobId);
-    const processedApplications = await fetchAndProcessEmails(req, res);
-    res.json({ success: true, message: 'Emails processed successfully', applications: processedApplications });
-  } catch (error) {
-    console.error('Error processing emails:', error);
-    res.status(500).json({ success: false, message: 'Failed to process emails', error: error.message });
-  }
+// Add this test route
+router.get('/test', (req, res) => {
+  res.json({ message: 'Email routes are working' });
 });
+
+router.post('/:jobId/process-emails', protect, fetchAndProcessEmails);
 
 module.exports = router;
