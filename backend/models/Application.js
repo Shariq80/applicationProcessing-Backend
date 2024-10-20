@@ -35,6 +35,20 @@ const applicationSchema = new mongoose.Schema({
     ref: 'User',
     required: true,
   },
+  attachments: [{
+    filename: {
+      type: String,
+      required: true
+    },
+    contentType: {
+      type: String,
+      required: true
+    },
+    data: {
+      type: Buffer,
+      required: true
+    }
+  }],
 }, { timestamps: true });
 
 module.exports = mongoose.model('Application', applicationSchema);

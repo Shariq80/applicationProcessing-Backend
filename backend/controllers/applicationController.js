@@ -39,4 +39,33 @@ const updateApplicationStatus = async (req, res) => {
   }
 };
 
-module.exports = { getApplications, updateApplicationStatus };
+const downloadAttachment = async (req, res) => {
+  try {
+    const { id, attachmentId } = req.params;
+    console.log(`Downloading attachment: Application ID ${id}, Attachment ID ${attachmentId}`);
+
+    const application = await Application.findById(id);
+    
+    if (!application) {
+      console.log('Application not found');
+      return res.status(404).json({ message: 'Application not found' });
+    }
+    
+    const attachment = application.attachments.id(attachmentId);
+    
+    if (!attachment) {
+      console.log('Attachment not found');
+      return res.status(404).json({ message: 'Attachment not found' });
+    }
+    
+    console.log(`Sending attachment: ${attachment.filename}, ${attachment.contentType}`);
+    res.set('Content-Type', attachment.contentType);
+    res.set('Content-Disposition', `attachment; filename="${attachment.filename}"`);
+    res.send(attachment.data);
+  } catch (error) {
+    console.error('Error downloading attachment:', error);
+    res.status(500).json({ message: error.message });
+  }
+};
+
+module.exports = { getApplications, updateApplicationStatus, downloadAttachment };

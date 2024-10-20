@@ -58,7 +58,7 @@ const fetchAndProcessEmails = async (req, res) => {
           id: message.id,
         });
 
-        const { applicantEmail, resumeText, extractedJobTitle } = await parseEmail(email.data, job.title);
+        const { applicantEmail, resumeText, extractedJobTitle, attachments } = await parseEmail(email.data, job.title, gmail, message.id);
 
         if (!resumeText) {
           console.log(`No resume text found for email ${message.id}`);
@@ -80,6 +80,16 @@ const fetchAndProcessEmails = async (req, res) => {
           summary,
           missingSkills,
           processedBy: user._id,
+          attachments: attachments.map(att => ({
+            filename: att.filename,
+            contentType: att.mimeType,
+            data: att.data // This should already be a Buffer
+          }))
+        });
+
+        console.log(`Application created with ${application.attachments.length} attachments`);
+        application.attachments.forEach((att, index) => {
+          console.log(`Attachment ${index}: ${att.filename}, ${att.contentType}, Data length: ${att.data.length}`);
         });
 
         processedApplications.push(application);

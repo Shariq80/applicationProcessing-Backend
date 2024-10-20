@@ -3,7 +3,7 @@ const { Base64 } = require('js-base64');
 const pdf = require('pdf-parse');
 const mammoth = require('mammoth');
 
-const parseEmail = async (emailData, jobTitle) => {
+const parseEmail = async (emailData, jobTitle, gmail, messageId) => {
   try {
     const headers = emailData.payload.headers;
     const from = headers.find(header => header.name.toLowerCase() === 'from').value;
@@ -17,7 +17,7 @@ const parseEmail = async (emailData, jobTitle) => {
 
     if (emailData.payload.parts) {
       emailBody = extractEmailBody(emailData.payload.parts);
-      attachments = await extractAttachments(emailData.payload.parts);
+      attachments = await extractAttachments(emailData.payload.parts, gmail, messageId);
     } else if (emailData.payload.body.data) {
       emailBody = Base64.decode(emailData.payload.body.data.replace(/-/g, '+').replace(/_/g, '/'));
     }
@@ -26,7 +26,7 @@ const parseEmail = async (emailData, jobTitle) => {
 
     const resumeAttachment = findResumeAttachment(attachments);
     let resumeText = '';
-    if (resumeAttachment) {
+    if (resumeAttachment && resumeAttachment.data) {
       console.log('Resume attachment found:', resumeAttachment.filename);
       resumeText = await extractTextFromAttachment(resumeAttachment);
     }
@@ -40,6 +40,7 @@ const parseEmail = async (emailData, jobTitle) => {
       applicantEmail,
       resumeText,
       extractedJobTitle,
+      attachments,
     };
   } catch (error) {
     console.error('Error parsing email:', error);
@@ -69,19 +70,26 @@ const extractEmailBody = (parts) => {
   return body;
 };
 
-const extractAttachments = async (parts) => {
+const extractAttachments = async (parts, gmail, messageId) => {
   let attachments = [];
   for (const part of parts) {
     if (part.filename && part.body) {
-      const attachment = {
+      let attachmentData;
+      if (part.body.attachmentId) {
+        const attachment = await gmail.users.messages.attachments.get({
+          userId: 'me',
+          messageId: messageId,
+          id: part.body.attachmentId
+        });
+        attachmentData = Buffer.from(attachment.data.data, 'base64');
+      } else {
+        attachmentData = Buffer.from(part.body.data, 'base64');
+      }
+      attachments.push({
         filename: part.filename,
-        mimeType: part.mimeType,
-        size: part.body.size,
-        data: part.body.attachmentId ? null : part.body.data
-      };
-      attachments.push(attachment);
-    } else if (part.parts) {
-      attachments = attachments.concat(await extractAttachments(part.parts));
+        contentType: part.mimeType,
+        data: attachmentData
+      });
     }
   }
   return attachments;
