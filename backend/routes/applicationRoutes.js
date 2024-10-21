@@ -9,27 +9,28 @@ const router = express.Router();
 router.get('/:jobId', protect, getApplications);
 router.put('/:id/status', protect, updateApplicationStatus);
 router.post('/:jobId/process-emails', protect, fetchAndProcessEmails);
-router.get('/:id/attachment/:attachmentId', async (req, res) => {
+router.get('/:id/attachment/:attachmentId', protect, downloadAttachment);
+
+router.get('/', async (req, res) => {
+  try {
+    const applications = await Application.find().sort({ createdAt: -1 });
+    res.json(applications);
+  } catch (error) {
+    console.error('Error fetching applications:', error);
+    res.status(500).json({ message: 'Error fetching applications' });
+  }
+});
+
+router.get('/:id', async (req, res) => {
   try {
     const application = await Application.findById(req.params.id);
     if (!application) {
-      return res.status(404).send('Application not found');
+      return res.status(404).json({ message: 'Application not found' });
     }
-
-    const attachment = application.attachments.id(req.params.attachmentId);
-    if (!attachment) {
-      return res.status(404).send('Attachment not found');
-    }
-
-    res.set({
-      'Content-Type': attachment.contentType,
-      'Content-Disposition': `attachment; filename="${attachment.filename}"`,
-    });
-
-    res.send(attachment.data);
+    res.json(application);
   } catch (error) {
-    console.error('Error downloading attachment:', error);
-    res.status(500).send('Error downloading attachment');
+    console.error('Error fetching application:', error);
+    res.status(500).json({ message: 'Error fetching application' });
   }
 });
 

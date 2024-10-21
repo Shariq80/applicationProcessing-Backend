@@ -1,54 +1,23 @@
 const mongoose = require('mongoose');
 
-const applicationSchema = new mongoose.Schema({
-  job: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Job',
-    required: true,
-  },
-  applicantEmail: {
-    type: String,
-    required: true,
-  },
-  resumeText: {
-    type: String,
-    required: true,
-  },
-  score: {
-    type: Number,
-    required: true,
-  },
-  summary: {
-    type: String,
-    required: true,
-  },
-  missingSkills: [{
-    type: String,
-  }],
+const ApplicationSchema = new mongoose.Schema({
+  applicantEmail: String,
+  jobTitle: String,
+  resumeText: String,
+  score: Number,
+  summary: String,
+  missingSkills: [String],
   status: {
     type: String,
-    enum: ['pending', 'accepted', 'rejected'],
-    default: 'pending',
+    enum: ['Pending', 'Reviewed', 'Rejected', 'Shortlisted'],
+    default: 'Pending'
   },
-  processedBy: {
+  attachmentFilename: String,
+  job: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-    required: true,
+    ref: 'Job'
   },
-  attachments: [{
-    filename: {
-      type: String,
-      required: true
-    },
-    contentType: {
-      type: String,
-      required: true
-    },
-    data: {
-      type: Buffer,
-      required: true
-    }
-  }],
+  emailId: { type: String, unique: true }
 }, { timestamps: true });
 
-module.exports = mongoose.model('Application', applicationSchema);
+module.exports = mongoose.model('Application', ApplicationSchema);

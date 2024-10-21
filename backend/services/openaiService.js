@@ -3,46 +3,55 @@ const { getCachedAnalysis, setCachedAnalysis } = require('./cacheService');
 
 const openai = new OpenAI(process.env.OPENAI_API_KEY);
 
-const truncateText = (text, maxLength = 4000) => {
+const truncateText = (text, maxLength) => {
   if (text.length <= maxLength) return text;
-  return text.slice(0, maxLength) + '...';
+  return text.substr(0, maxLength) + '...';
 };
 
 const processResume = async (resumeText, jobDescription) => {
   try {
-    const cachedAnalysis = getCachedAnalysis(resumeText, jobDescription);
-    if (cachedAnalysis) {
-      return cachedAnalysis;
+    if (!resumeText || !resumeText.trim() || resumeText.startsWith('%PDF')) {
+      console.log('Invalid resume text, unable to process');
+      return {
+        score: 0,
+        summary: "Unable to process the resume. The resume text is empty, invalid, or contains only PDF metadata.",
+        missingSkills: []
+      };
     }
 
-    const prompt = `Please analyze the attached resume against the job description:
+    const cachedAnalysis = getCachedAnalysis(resumeText, jobDescription);
+    if (cachedAnalysis) {
+      console.log('Cached analysis found:', cachedAnalysis);
+      if (cachedAnalysis.score === 0 && cachedAnalysis.summary === "No summary provided by AI. Please review the application manually.") {
+        console.log('Cached analysis is invalid, reprocessing');
+      } else {
+        console.log('Using cached analysis');
+        return cachedAnalysis;
+      }
+    }
 
-Key Skills: Match with JD gets top priority. Penalize missing or irrelevant skills.
-Education: Reduce points if the candidate's education is irrelevant to the field.
-Achievements: Focus on JD-related accomplishments.
-Responsibilities: Compare listed duties with JD.
-Experience: Assess experience in required technologies.
-Industry Fit: Check relevance to the industry.
-
-Provide:
-A score from 1 to 10.
-A 2-3 line summary of fit with JD.
-A list of missing key skills or qualifications.
+    console.log('Sending request to OpenAI');
+    const cleanedResumeText = cleanText(resumeText);
+    const truncatedResumeText = truncateText(cleanedResumeText, 3000); // Truncate to 3000 characters
+    const prompt = `Analyze the following resume against the job description:
 
 Job Description:
 ${jobDescription}
 
-Resume:
-${truncateText(resumeText)}
+Resume (truncated):
+${truncatedResumeText}
 
-Response Format:
-Score: [single digit numeric score]
-Summary: [3-4 line summary]
+If the resume text appears to be unreadable or contains non-text content, please indicate this in your analysis.
+
+Provide a response in the following format:
+Score: [single digit numeric score from 1 to 10]
+Summary: [2-3 line summary of the candidate's fit with the job description]
 Missing Skills:
 - [skill 1]
 - [skill 2]
 - [skill 3]
-`;
+
+Ensure that you always provide a response in this format, even if the resume content is unclear or incomplete.`;
 
     const response = await openai.chat.completions.create({
       model: "gpt-3.5-turbo",
@@ -55,15 +64,35 @@ Missing Skills:
       temperature: 0.5,
     });
 
+    console.log('Received response from OpenAI');
+    console.log('Response:', JSON.stringify(response, null, 2));
+
     const analysis = response.choices[0].message.content;
-    const [score, summary, missingSkills] = parseAnalysis(analysis);
+    console.log('Analysis:', analysis);
+
+    let [score, summary, missingSkills] = parseAnalysis(analysis);
+
+    console.log('Parsed analysis:', { score, summary, missingSkills });
+
+    // Ensure summary is not empty
+    if (!summary || summary.trim() === '') {
+      console.log('Summary is empty, using default');
+      summary = "No summary provided by AI. Please review the application manually.";
+    }
 
     const result = { score, summary, missingSkills };
     setCachedAnalysis(resumeText, jobDescription, result);
     return result;
   } catch (error) {
     console.error('Error processing resume with OpenAI:', error);
-    throw error;
+    if (error.response) {
+      console.error('OpenAI API response:', error.response.data);
+    }
+    return {
+      score: 0,
+      summary: "Error occurred while processing the resume. Please review manually.",
+      missingSkills: []
+    };
   }
 };
 
@@ -72,18 +101,33 @@ const parseAnalysis = (analysis) => {
   let score = 0;
   let summary = '';
   let missingSkills = [];
+  let inMissingSkills = false;
 
   for (const line of lines) {
     if (line.startsWith('Score:')) {
-      score = parseInt(line.split(':')[1].trim());
+      score = parseInt(line.split(':')[1].trim()) || 0;
     } else if (line.startsWith('Summary:')) {
-      summary = line.split(':')[1].trim();
-    } else if (line.startsWith('- ')) {
-      missingSkills.push(line.substring(2).trim());
+      summary = line.split(':').slice(1).join(':').trim();
+    } else if (line.startsWith('Missing Skills:')) {
+      inMissingSkills = true;
+    } else if (inMissingSkills && line.trim().startsWith('-')) {
+      missingSkills.push(line.trim().slice(1).trim());
     }
   }
 
+  if (score === 0 || !summary) {
+    console.log('Invalid analysis result:', { score, summary, missingSkills });
+    throw new Error('Invalid analysis result');
+  }
+
   return [score, summary, missingSkills];
+};
+
+const cleanText = (text) => {
+  // Remove any remaining non-printable characters
+  return text.replace(/[^\x20-\x7E\n]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
 };
 
 module.exports = { processResume };

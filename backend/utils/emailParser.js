@@ -2,6 +2,11 @@ const simpleParser = require('mailparser').simpleParser;
 const { Base64 } = require('js-base64');
 const pdf = require('pdf-parse');
 const mammoth = require('mammoth');
+const pdfParse = require('pdf-parse');
+const { PDFExtract } = require('pdf.js-extract');
+const pdfExtract = new PDFExtract();
+const fs = require('fs');
+const path = require('path');
 
 const parseEmail = async (emailData, jobTitle, gmail, messageId) => {
   try {
@@ -23,34 +28,54 @@ const parseEmail = async (emailData, jobTitle, gmail, messageId) => {
     if (emailData.payload.parts) {
       emailBody = extractEmailBody(emailData.payload.parts);
       attachments = await extractAttachments(emailData.payload.parts, gmail, messageId);
-    } else if (emailData.payload.body.data) {
+    } else if (emailData.payload.body && emailData.payload.body.data) {
       emailBody = Base64.decode(emailData.payload.body.data.replace(/-/g, '+').replace(/_/g, '/'));
     }
 
-    const parsedEmail = await simpleParser(emailBody);
+    console.log('Email body length:', emailBody ? emailBody.length : 0);
+    console.log('First 500 characters of email body:', emailBody ? emailBody.substring(0, 500) : 'Empty body');
 
     let resumeText = '';
+    let attachmentFilename = '';
     const resumeAttachment = findResumeAttachment(attachments);
     if (resumeAttachment && resumeAttachment.data) {
       console.log('Resume attachment found:', resumeAttachment.filename);
-      resumeText = await extractTextFromAttachment(resumeAttachment);
+      attachmentFilename = resumeAttachment.filename;
+      
+      // Save the attachment to a local directory
+      const attachmentsDir = path.join(__dirname, '..', 'attachments');
+      if (!fs.existsSync(attachmentsDir)) {
+        fs.mkdirSync(attachmentsDir);
+      }
+      const filePath = path.join(attachmentsDir, `${messageId}_${resumeAttachment.filename}`);
+      fs.writeFileSync(filePath, Buffer.from(resumeAttachment.data, 'base64'));
+      
+      // Extract text from the saved PDF
+      resumeText = await extractTextFromPDF(filePath);
+      
+      if (!resumeText) {
+        console.log('Failed to extract text from attachment');
+      }
     }
 
-    if (!resumeText.trim()) {
+    if (!resumeText && emailBody && emailBody.trim().length > 0) {
       console.log('Using email body as resume text');
-      resumeText = parsedEmail.text;
+      resumeText = emailBody;
     }
 
-    if (!resumeText.trim()) {
-      console.log('No resume text found in email or attachments');
+    if (!resumeText) {
+      console.log('No valid resume text found in attachment or email body');
       return null;
     }
+
+    console.log('Final resume text length:', resumeText.length);
+    console.log('First 500 characters of final resume text:', resumeText.substring(0, 500));
 
     return {
       applicantEmail,
       resumeText,
       extractedJobTitle,
-      attachments,
+      attachmentFilename
     };
   } catch (error) {
     console.error('Error parsing email:', error);
@@ -83,21 +108,21 @@ const extractEmailBody = (parts) => {
 const extractAttachments = async (parts, gmail, messageId) => {
   let attachments = [];
   for (const part of parts) {
-    if (part.filename && part.body) {
-      let attachmentData;
+    if (part.filename) {
+      let attachmentData = null;
       if (part.body.attachmentId) {
         const attachment = await gmail.users.messages.attachments.get({
           userId: 'me',
           messageId: messageId,
           id: part.body.attachmentId
         });
-        attachmentData = Buffer.from(attachment.data.data, 'base64');
-      } else {
-        attachmentData = Buffer.from(part.body.data, 'base64');
+        attachmentData = attachment.data.data;
+      } else if (part.body.data) {
+        attachmentData = part.body.data;
       }
       attachments.push({
         filename: part.filename,
-        contentType: part.mimeType,
+        mimeType: part.mimeType,
         data: attachmentData
       });
     }
@@ -117,24 +142,40 @@ const findResumeAttachment = (attachments) => {
 const extractTextFromAttachment = async (attachment) => {
   if (!attachment || !attachment.data) {
     console.log('No attachment data found');
-    return null;  // Return null instead of an empty string
+    return null;
   }
 
   const buffer = Buffer.from(attachment.data, 'base64');
   
   try {
+    console.log(`Attempting to extract text from ${attachment.filename} (${attachment.mimeType})`);
+    let extractedText = '';
+
     if (attachment.mimeType === 'application/pdf') {
-      const data = await pdf(buffer);
-      return data.text;
+      const pdfData = await pdfParse(buffer);
+      extractedText = pdfData.text;
     } else if (attachment.mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
       const result = await mammoth.extractRawText({ buffer });
-      return result.value;
+      extractedText = result.value;
     } else {
-      return buffer.toString('utf8');
+      extractedText = buffer.toString('utf8');
     }
+
+    // Clean up the extracted text
+    extractedText = extractedText.replace(/\s+/g, ' ').trim();
+    extractedText = extractedText.replace(/[^\x20-\x7E\n]/g, '');
+
+    if (!extractedText.trim()) {
+      console.log(`Failed to extract valid text from ${attachment.filename}`);
+      return null;
+    }
+
+    console.log(`Successfully extracted ${extractedText.length} characters from ${attachment.filename}`);
+    console.log('First 500 characters of extracted text:', extractedText.substring(0, 500));
+    return extractedText;
   } catch (error) {
-    console.error('Error extracting text from attachment:', error);
-    return null;  // Return null if extraction fails
+    console.error(`Error extracting text from ${attachment.filename}:`, error);
+    return null;
   }
 };
 
@@ -153,6 +194,40 @@ const extractJobTitle = (subject, jobTitle) => {
   }
   
   return null;
+};
+
+const renderPage = async (pageData) => {
+  let render_options = {
+    normalizeWhitespace: false,
+    disableCombineTextItems: false
+  };
+  let textContent = await pageData.getTextContent(render_options);
+  let lastY, text = '';
+  for (let item of textContent.items) {
+    if (lastY == item.transform[5] || !lastY){
+      text += item.str;
+    } else {
+      text += '\n' + item.str;
+    }    
+    lastY = item.transform[5];
+  }
+  return text;
+};
+
+const extractTextFromPDF = async (filePath) => {
+  try {
+    const dataBuffer = fs.readFileSync(filePath);
+    const data = await pdfParse(dataBuffer);
+    if (data && data.text) {
+      return data.text.trim();
+    } else {
+      console.log('PDF parsing returned no text');
+      return null;
+    }
+  } catch (error) {
+    console.error('Error extracting text from PDF:', error);
+    return null;
+  }
 };
 
 module.exports = { parseEmail };

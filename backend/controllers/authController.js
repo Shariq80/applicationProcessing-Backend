@@ -63,7 +63,7 @@ const googleAuth = (req, res) => {
   const scopes = [
     'https://www.googleapis.com/auth/userinfo.profile',
     'https://www.googleapis.com/auth/userinfo.email',
-    'https://www.googleapis.com/auth/gmail.readonly'
+    'https://www.googleapis.com/auth/gmail.modify'
   ];
 
   const authorizationUrl = oAuth2Client.generateAuthUrl({
@@ -93,14 +93,10 @@ const googleCallback = async (req, res) => {
       url: 'https://www.googleapis.com/oauth2/v3/userinfo'
     });
 
-    let user = await User.findOne({ email: userInfo.data.email });
+    const user = await User.findOne({ email: userInfo.data.email });
 
     if (!user) {
-      user = await User.create({
-        name: userInfo.data.name,
-        email: userInfo.data.email,
-        password: await bcrypt.hash(Math.random().toString(36).slice(-8), 10),
-      });
+      return res.redirect(`${process.env.FRONTEND_URL}/auth-error`);
     }
 
     await GoogleCredential.findOneAndUpdate(
@@ -114,9 +110,7 @@ const googleCallback = async (req, res) => {
       { upsert: true, new: true }
     );
 
-    const jwtToken = generateToken(user._id);
-
-    res.redirect(`${process.env.FRONTEND_URL}/auth-callback?token=${jwtToken}`);
+    res.redirect(`${process.env.FRONTEND_URL}/dashboard`);
   } catch (error) {
     console.error('Error in Google callback:', error);
     res.redirect(`${process.env.FRONTEND_URL}/auth-error`);

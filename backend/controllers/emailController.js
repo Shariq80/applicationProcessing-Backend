@@ -45,7 +45,6 @@ const fetchAndProcessEmails = async (req, res) => {
 
     const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
 
-    const user = await User.findById(req.user._id);
     const job = await Job.findById(jobId);
     if (!job) {
       throw new Error('Job not found');
@@ -60,6 +59,7 @@ const fetchAndProcessEmails = async (req, res) => {
 
     const messages = response.data.messages || [];
     const processedApplications = [];
+    const skippedEmails = [];
 
     for (const message of messages) {
       try {
@@ -71,14 +71,16 @@ const fetchAndProcessEmails = async (req, res) => {
         const parsedEmail = await parseEmail(email.data, job.title, gmail, message.id);
 
         if (!parsedEmail) {
-          console.log(`Skipping email ${message.id}: Not a valid job application`);
+          console.log(`Skipping email ${message.id}: Unable to parse or invalid application`);
+          skippedEmails.push(message.id);
           continue;
         }
 
-        const { applicantEmail, resumeText, extractedJobTitle, attachments } = parsedEmail;
+        const { applicantEmail, resumeText, extractedJobTitle, attachmentFilename } = parsedEmail;
 
-        if (!extractedJobTitle) {
-          console.log(`Skipping email ${message.id}: Job title not found in subject`);
+        if (!resumeText || resumeText.trim().length === 0) {
+          console.log(`Skipping email ${message.id}: No valid resume text found`);
+          skippedEmails.push(message.id);
           continue;
         }
 
@@ -87,32 +89,66 @@ const fetchAndProcessEmails = async (req, res) => {
           processedResult = await processResume(resumeText, job.description);
         } catch (openaiError) {
           console.error('Error processing resume with OpenAI:', openaiError);
-          if (openaiError.code === 'insufficient_quota') {
-            throw openaiError; // Re-throw to stop processing all emails
-          }
-          continue; // Skip this email and continue with the next one
+          processedResult = {
+            score: 0,
+            summary: "Error occurred while processing the resume. Please review manually.",
+            missingSkills: []
+          };
         }
 
-        const { score, summary, missingSkills } = processedResult;
+        const existingApplication = await Application.findOne({ emailId: message.id });
+        if (existingApplication) {
+          console.log(`Skipping already processed email: ${message.id}`);
+          continue;
+        }
 
-        const application = await Application.create({
-          job: job._id,
+        const application = new Application({
           applicantEmail,
+          jobTitle: extractedJobTitle,
           resumeText,
-          score,
-          summary,
-          missingSkills,
-          processedBy: user._id,
-          attachments: attachments.map(att => ({
-            filename: att.filename,
-            contentType: att.mimeType || 'application/octet-stream',
-            data: att.data
-          }))
+          score: processedResult.score,
+          summary: processedResult.summary,
+          missingSkills: processedResult.missingSkills,
+          attachmentFilename: attachmentFilename,
+          job: job._id
         });
 
+        await application.save();
         processedApplications.push(application);
 
-        // Mark the email as read
+        // Mark the email as processed
+        let retries = 3;
+        let modificationSuccessful = false;
+        while (retries > 0 && !modificationSuccessful) {
+          try {
+            await gmail.users.messages.modify({
+              userId: 'me',
+              id: message.id,
+              requestBody: {
+                addLabelIds: ['Label_Processed'], // Replace with your actual label ID
+                removeLabelIds: ['INBOX']
+              }
+            });
+            console.log(`Processed and marked as read: ${message.id}`);
+            modificationSuccessful = true;
+          } catch (modifyError) {
+            console.error(`Error modifying email ${message.id}:`, modifyError);
+            retries--;
+            if (retries === 0) {
+              console.log(`Failed to modify email ${message.id} after 3 attempts`);
+              skippedEmails.push({ id: message.id, reason: 'Email modification failed' });
+            } else {
+              console.log(`Retrying email modification for ${message.id}. Attempts left: ${retries}`);
+              await new Promise(resolve => setTimeout(resolve, 2000)); // Wait for 2 seconds before retrying
+            }
+          }
+        }
+
+        if (!modificationSuccessful) {
+          console.log(`Proceeding with email processing for ${message.id} despite modification failure`);
+        }
+
+        // Add this line to mark the email as read even if modification fails
         await gmail.users.messages.modify({
           userId: 'me',
           id: message.id,
@@ -120,20 +156,27 @@ const fetchAndProcessEmails = async (req, res) => {
             removeLabelIds: ['UNREAD']
           }
         });
-
-        console.log(`Processed and marked as read: ${message.id}`);
-      } catch (error) {
-        if (error.code === 'insufficient_quota') {
-          throw error; // Re-throw to stop processing all emails
-        }
-        console.error(`Error processing email ${message.id}:`, error);
+      } catch (emailError) {
+        console.error(`Error processing email ${message.id}:`, emailError);
+        skippedEmails.push(message.id);
       }
     }
 
-    res.json({ success: true, message: 'Emails processed successfully', applications: processedApplications });
+    res.json({ 
+      success: true, 
+      message: 'Emails processed', 
+      applications: processedApplications,
+      skippedEmails: skippedEmails
+    });
   } catch (error) {
-    console.error('Detailed error in fetchAndProcessEmails:', error);
-    res.status(500).json({ success: false, message: 'Failed to process emails', error: error.message });
+    console.error('Error fetching and processing emails:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Error fetching and processing emails', 
+      error: error.message,
+      processedApplications: processedApplications || [],
+      skippedEmails: skippedEmails || []
+    });
   }
 };
 
