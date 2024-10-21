@@ -68,10 +68,17 @@ const fetchAndProcessEmails = async (req, res) => {
           id: message.id,
         });
 
-        const { applicantEmail, resumeText, extractedJobTitle, attachments } = await parseEmail(email.data, job.title, gmail, message.id);
+        const parsedEmail = await parseEmail(email.data, job.title, gmail, message.id);
 
-        if (!resumeText || !extractedJobTitle) {
-          console.log(`Skipping email ${message.id}: No resume text or job title not found`);
+        if (!parsedEmail) {
+          console.log(`Skipping email ${message.id}: Not a valid job application`);
+          continue;
+        }
+
+        const { applicantEmail, resumeText, extractedJobTitle, attachments } = parsedEmail;
+
+        if (!extractedJobTitle) {
+          console.log(`Skipping email ${message.id}: Job title not found in subject`);
           continue;
         }
 
@@ -98,7 +105,7 @@ const fetchAndProcessEmails = async (req, res) => {
           processedBy: user._id,
           attachments: attachments.map(att => ({
             filename: att.filename,
-            contentType: att.mimeType,
+            contentType: att.mimeType || 'application/octet-stream',
             data: att.data
           }))
         });

@@ -33,6 +33,7 @@
     "mailparser-mit": "^1.0.0",
     "mammoth": "^1.8.0",
     "mongoose": "^8.7.2",
+    "node-cache": "^5.1.2",
     "node-cron": "^3.0.3",
     "nodemailer": "^6.9.15",
     "openai": "^4.68.0",

@@ -1,4 +1,5 @@
 const OpenAI = require('openai');
+const { getCachedAnalysis, setCachedAnalysis } = require('./cacheService');
 
 const openai = new OpenAI(process.env.OPENAI_API_KEY);
 
@@ -9,6 +10,11 @@ const truncateText = (text, maxLength = 4000) => {
 
 const processResume = async (resumeText, jobDescription) => {
   try {
+    const cachedAnalysis = getCachedAnalysis(resumeText, jobDescription);
+    if (cachedAnalysis) {
+      return cachedAnalysis;
+    }
+
     const prompt = `Please analyze the attached resume against the job description:
 
 Key Skills: Match with JD gets top priority. Penalize missing or irrelevant skills.
@@ -39,7 +45,7 @@ Missing Skills:
 `;
 
     const response = await openai.chat.completions.create({
-      model: "gpt-3.5-turbo-16k",
+      model: "gpt-3.5-turbo",
       messages: [
         { role: "system", content: "You are a helpful assistant that analyzes resumes." },
         { role: "user", content: prompt }
@@ -52,7 +58,9 @@ Missing Skills:
     const analysis = response.choices[0].message.content;
     const [score, summary, missingSkills] = parseAnalysis(analysis);
 
-    return { score, summary, missingSkills };
+    const result = { score, summary, missingSkills };
+    setCachedAnalysis(resumeText, jobDescription, result);
+    return result;
   } catch (error) {
     console.error('Error processing resume with OpenAI:', error);
     throw error;

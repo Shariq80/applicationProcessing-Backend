@@ -12,6 +12,11 @@ const parseEmail = async (emailData, jobTitle, gmail, messageId) => {
     const applicantEmail = extractEmail(from);
     const extractedJobTitle = extractJobTitle(subject, jobTitle);
 
+    if (!extractedJobTitle || !applicantEmail || applicantEmail.includes('noreply') || applicantEmail.includes('no-reply')) {
+      console.log(`Skipping email ${messageId}: Not a valid job application`);
+      return null;
+    }
+
     let emailBody = '';
     let attachments = [];
 
@@ -24,16 +29,21 @@ const parseEmail = async (emailData, jobTitle, gmail, messageId) => {
 
     const parsedEmail = await simpleParser(emailBody);
 
-    const resumeAttachment = findResumeAttachment(attachments);
     let resumeText = '';
+    const resumeAttachment = findResumeAttachment(attachments);
     if (resumeAttachment && resumeAttachment.data) {
       console.log('Resume attachment found:', resumeAttachment.filename);
       resumeText = await extractTextFromAttachment(resumeAttachment);
     }
 
-    if (!resumeText) {
+    if (!resumeText.trim()) {
       console.log('Using email body as resume text');
       resumeText = parsedEmail.text;
+    }
+
+    if (!resumeText.trim()) {
+      console.log('No resume text found in email or attachments');
+      return null;
     }
 
     return {
@@ -44,7 +54,7 @@ const parseEmail = async (emailData, jobTitle, gmail, messageId) => {
     };
   } catch (error) {
     console.error('Error parsing email:', error);
-    throw new Error('Failed to parse email: ' + error.message);
+    return null;
   }
 };
 
@@ -131,15 +141,17 @@ const extractTextFromAttachment = async (attachment) => {
 const extractJobTitle = (subject, jobTitle) => {
   const subjectLower = subject.toLowerCase();
   const jobTitleLower = jobTitle.toLowerCase();
+  const jobTitleWords = jobTitleLower.split(' ');
+  
   if (subjectLower.includes(jobTitleLower)) {
     return jobTitle;
   }
-  const words = jobTitleLower.split(' ');
-  for (let i = 0; i < words.length; i++) {
-    if (subjectLower.includes(words[i])) {
-      return jobTitle;
-    }
+  
+  const matchedWords = jobTitleWords.filter(word => subjectLower.includes(word));
+  if (matchedWords.length >= Math.ceil(jobTitleWords.length / 2) && subjectLower.includes('application')) {
+    return jobTitle;
   }
+  
   return null;
 };
 
