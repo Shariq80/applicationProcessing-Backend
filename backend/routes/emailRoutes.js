@@ -1,6 +1,6 @@
 const express = require('express');
 const { protect } = require('../middleware/authMiddleware');
-const { fetchAndProcessEmails } = require('../controllers/emailController');
+const { fetchAndProcessEmails, downloadAttachments } = require('../controllers/emailController');
 
 const router = express.Router();
 
@@ -10,5 +10,7 @@ router.get('/test', (req, res) => {
 });
 
 router.post('/:jobId/process-emails', protect, fetchAndProcessEmails);
+
+router.get('/download-attachments/:jobId', downloadAttachments);
 
 module.exports = router;

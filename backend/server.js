@@ -1,6 +1,5 @@
 require('dotenv').config();
 
-// Temporary: manually set environment variables if they're not loaded
 process.env.GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID
 process.env.GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET
 process.env.GOOGLE_CALLBACK_URL = process.env.GOOGLE_CALLBACK_URL
@@ -17,9 +16,7 @@ const emailRoutes = require('./routes/emailRoutes');
 const errorMiddleware = require('./middleware/errorMiddleware');
 const dashboardRoutes = require('./routes/dashboardRoutes');
 const rateLimit = require('express-rate-limit');
-const cron = require('node-cron');
 const { fetchAndProcessEmails } = require('./controllers/emailController');
-const logger = require('./utils/logger');
 
 // Initialize express app
 const app = express();
@@ -75,12 +72,3 @@ const limiter = rateLimit({
 });
 
 app.use('/api', limiter);
-
-// Add this after your route definitions
-cron.schedule('*/30 * * * *', async () => {
-  console.log('Running email processing job');
-  await fetchAndProcessEmails();
-});
-
-// Add this line after connecting to the database
-logger.info('Logging initialized');

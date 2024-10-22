@@ -42,8 +42,6 @@ const updateApplicationStatus = async (req, res) => {
 const downloadAttachment = async (req, res) => {
   try {
     const { id, attachmentId } = req.params;
-    console.log(`Downloading attachment: Application ID ${id}, Attachment ID ${attachmentId}`);
-    console.log(`Downloading attachment: Application ID ${id}, Attachment ID ${attachmentId}`);
     const application = await Application.findById(id);
     
     if (!application) {

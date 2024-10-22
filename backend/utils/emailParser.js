@@ -7,6 +7,7 @@ const { PDFExtract } = require('pdf.js-extract');
 const pdfExtract = new PDFExtract();
 const fs = require('fs');
 const path = require('path');
+const sanitize = require('sanitize-filename');
 
 const parseEmail = async (emailData, jobTitle, gmail, messageId) => {
   try {
@@ -32,14 +33,11 @@ const parseEmail = async (emailData, jobTitle, gmail, messageId) => {
       emailBody = Base64.decode(emailData.payload.body.data.replace(/-/g, '+').replace(/_/g, '/'));
     }
 
-    console.log('Email body length:', emailBody ? emailBody.length : 0);
-    console.log('First 500 characters of email body:', emailBody ? emailBody.substring(0, 500) : 'Empty body');
 
     let resumeText = '';
     let attachmentFilename = '';
     const resumeAttachment = findResumeAttachment(attachments);
     if (resumeAttachment && resumeAttachment.data) {
-      console.log('Resume attachment found:', resumeAttachment.filename);
       attachmentFilename = resumeAttachment.filename;
       
       // Save the attachment to a local directory
@@ -50,8 +48,11 @@ const parseEmail = async (emailData, jobTitle, gmail, messageId) => {
       const filePath = path.join(attachmentsDir, `${messageId}_${resumeAttachment.filename}`);
       fs.writeFileSync(filePath, Buffer.from(resumeAttachment.data, 'base64'));
       
+      // Store the filename in the parsed email data
+      attachmentFilename = resumeAttachment.filename;
+      
       // Extract text from the saved PDF
-      resumeText = await extractTextFromPDF(filePath);
+      resumeText = await extractTextFromAttachment(resumeAttachment);
       
       if (!resumeText) {
         console.log('Failed to extract text from attachment');
@@ -67,9 +68,6 @@ const parseEmail = async (emailData, jobTitle, gmail, messageId) => {
       console.log('No valid resume text found in attachment or email body');
       return null;
     }
-
-    console.log('Final resume text length:', resumeText.length);
-    console.log('First 500 characters of final resume text:', resumeText.substring(0, 500));
 
     return {
       applicantEmail,
@@ -157,6 +155,10 @@ const extractTextFromAttachment = async (attachment) => {
     } else if (attachment.mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
       const result = await mammoth.extractRawText({ buffer });
       extractedText = result.value;
+    } else if (attachment.mimeType === 'application/msword') {
+      // For .doc files, you might need to use a different library or convert to .docx first
+      console.log('DOC file detected, extraction might be limited');
+      extractedText = buffer.toString('utf8');
     } else {
       extractedText = buffer.toString('utf8');
     }
@@ -164,14 +166,6 @@ const extractTextFromAttachment = async (attachment) => {
     // Clean up the extracted text
     extractedText = extractedText.replace(/\s+/g, ' ').trim();
     extractedText = extractedText.replace(/[^\x20-\x7E\n]/g, '');
-
-    if (!extractedText.trim()) {
-      console.log(`Failed to extract valid text from ${attachment.filename}`);
-      return null;
-    }
-
-    console.log(`Successfully extracted ${extractedText.length} characters from ${attachment.filename}`);
-    console.log('First 500 characters of extracted text:', extractedText.substring(0, 500));
     return extractedText;
   } catch (error) {
     console.error(`Error extracting text from ${attachment.filename}:`, error);
@@ -194,40 +188,6 @@ const extractJobTitle = (subject, jobTitle) => {
   }
   
   return null;
-};
-
-const renderPage = async (pageData) => {
-  let render_options = {
-    normalizeWhitespace: false,
-    disableCombineTextItems: false
-  };
-  let textContent = await pageData.getTextContent(render_options);
-  let lastY, text = '';
-  for (let item of textContent.items) {
-    if (lastY == item.transform[5] || !lastY){
-      text += item.str;
-    } else {
-      text += '\n' + item.str;
-    }    
-    lastY = item.transform[5];
-  }
-  return text;
-};
-
-const extractTextFromPDF = async (filePath) => {
-  try {
-    const dataBuffer = fs.readFileSync(filePath);
-    const data = await pdfParse(dataBuffer);
-    if (data && data.text) {
-      return data.text.trim();
-    } else {
-      console.log('PDF parsing returned no text');
-      return null;
-    }
-  } catch (error) {
-    console.error('Error extracting text from PDF:', error);
-    return null;
-  }
 };
 
 module.exports = { parseEmail };

@@ -9,7 +9,7 @@ const ApplicationSchema = new mongoose.Schema({
   missingSkills: [String],
   status: {
     type: String,
-    enum: ['Pending', 'Reviewed', 'Rejected', 'Shortlisted'],
+    enum: ['Pending', 'Rejected', 'Shortlisted'],
     default: 'Pending'
   },
   attachmentFilename: String,

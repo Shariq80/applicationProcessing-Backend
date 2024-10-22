@@ -15,7 +15,6 @@ router.post('/login', login);
 router.get('/google', googleAuth);
 router.get('/google/callback', googleCallback);
 router.get('/google/url', googleAuthLimiter, (req, res, next) => {
-  console.log(`Google Auth URL requested from IP: ${req.ip}`);
   next();
 }, googleAuth);
 

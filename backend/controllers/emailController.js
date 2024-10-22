@@ -6,6 +6,10 @@ const Application = require('../models/Application');
 const Job = require('../models/Job');
 const User = require('../models/User');
 const GoogleCredential = require('../models/GoogleCredential');
+const fs = require('fs');
+const path = require('path');
+const archiver = require('archiver');
+const sanitize = require('sanitize-filename');
 
 const fetchOAuthCredentialsFromDB = async () => {
   const credential = await GoogleCredential.findOne().sort({ createdAt: -1 });
@@ -20,7 +24,6 @@ const fetchAndProcessEmails = async (req, res) => {
     const { jobId } = req.params;
     
     const oauthCredentials = await fetchOAuthCredentialsFromDB();
-    console.log('OAuth credentials fetched:', oauthCredentials);
 
     if (!oauthCredentials || !oauthCredentials.refreshToken) {
       throw new Error('No valid OAuth credentials found');
@@ -35,22 +38,12 @@ const fetchAndProcessEmails = async (req, res) => {
       refresh_token: oauthCredentials.refreshToken
     });
 
-    try {
-      const { token } = await oauth2Client.getAccessToken();
-      console.log('New access token obtained:', token);
-    } catch (tokenError) {
-      console.error('Error getting access token:', tokenError);
-      throw new Error('Failed to get access token: ' + tokenError.message);
-    }
-
     const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
 
     const job = await Job.findById(jobId);
     if (!job) {
       throw new Error('Job not found');
     }
-
-    console.log('Searching for job with ID:', jobId);
 
     const response = await gmail.users.messages.list({
       userId: 'me',
@@ -67,19 +60,9 @@ const fetchAndProcessEmails = async (req, res) => {
           userId: 'me',
           id: message.id,
         });
-
-        const parsedEmail = await parseEmail(email.data, job.title, gmail, message.id);
-
-        if (!parsedEmail) {
-          console.log(`Skipping email ${message.id}: Unable to parse or invalid application`);
-          skippedEmails.push(message.id);
-          continue;
-        }
-
         const { applicantEmail, resumeText, extractedJobTitle, attachmentFilename } = parsedEmail;
 
         if (!resumeText || resumeText.trim().length === 0) {
-          console.log(`Skipping email ${message.id}: No valid resume text found`);
           skippedEmails.push(message.id);
           continue;
         }
@@ -98,7 +81,6 @@ const fetchAndProcessEmails = async (req, res) => {
 
         const existingApplication = await Application.findOne({ emailId: message.id });
         if (existingApplication) {
-          console.log(`Skipping already processed email: ${message.id}`);
           continue;
         }
 
@@ -117,45 +99,19 @@ const fetchAndProcessEmails = async (req, res) => {
         processedApplications.push(application);
 
         // Mark the email as processed
-        let retries = 3;
-        let modificationSuccessful = false;
-        while (retries > 0 && !modificationSuccessful) {
-          try {
-            await gmail.users.messages.modify({
-              userId: 'me',
-              id: message.id,
-              requestBody: {
-                addLabelIds: ['Label_Processed'], // Replace with your actual label ID
-                removeLabelIds: ['INBOX']
-              }
-            });
-            console.log(`Processed and marked as read: ${message.id}`);
-            modificationSuccessful = true;
-          } catch (modifyError) {
-            console.error(`Error modifying email ${message.id}:`, modifyError);
-            retries--;
-            if (retries === 0) {
-              console.log(`Failed to modify email ${message.id} after 3 attempts`);
-              skippedEmails.push({ id: message.id, reason: 'Email modification failed' });
-            } else {
-              console.log(`Retrying email modification for ${message.id}. Attempts left: ${retries}`);
-              await new Promise(resolve => setTimeout(resolve, 2000)); // Wait for 2 seconds before retrying
+        try {
+          await gmail.users.messages.modify({
+            userId: 'me',
+            id: message.id,
+            requestBody: {
+              addLabelIds: ['PROCESSED'],
+              removeLabelIds: ['INBOX', 'UNREAD']
             }
-          }
+          });
+        } catch (modifyError) {
+          console.error(`Error modifying email ${message.id}:`, modifyError);
+          skippedEmails.push({ id: message.id, reason: 'Email modification failed' });
         }
-
-        if (!modificationSuccessful) {
-          console.log(`Proceeding with email processing for ${message.id} despite modification failure`);
-        }
-
-        // Add this line to mark the email as read even if modification fails
-        await gmail.users.messages.modify({
-          userId: 'me',
-          id: message.id,
-          requestBody: {
-            removeLabelIds: ['UNREAD']
-          }
-        });
       } catch (emailError) {
         console.error(`Error processing email ${message.id}:`, emailError);
         skippedEmails.push(message.id);
@@ -180,4 +136,54 @@ const fetchAndProcessEmails = async (req, res) => {
   }
 };
 
-module.exports = { fetchAndProcessEmails };
+const downloadAttachments = async (req, res) => {
+  try {
+    const { jobId } = req.params;
+    
+    const job = await Job.findById(jobId);
+    if (!job) {
+      return res.status(404).json({ success: false, message: 'Job not found' });
+    }
+
+    const applications = await Application.find({ job: jobId });
+
+    const baseDir = path.join(__dirname, '..', 'attachments');
+    const jobDir = path.join(baseDir, sanitize(job.title));
+
+    if (!fs.existsSync(jobDir)) {
+      fs.mkdirSync(jobDir, { recursive: true });
+    }
+
+    for (const application of applications) {
+      if (application.attachmentFilename) {
+        const sourceFile = path.join(baseDir, `${application.emailId}_${application.attachmentFilename}`);
+        const destFile = path.join(jobDir, sanitize(application.attachmentFilename));
+
+        if (fs.existsSync(sourceFile)) {
+          fs.copyFileSync(sourceFile, destFile);
+        } else {
+          console.log(`Source file not found: ${sourceFile}`);
+        }
+      }
+    }
+
+    res.json({ 
+      success: true, 
+      message: 'Attachments downloaded and organized by job title', 
+      jobTitle: job.title,
+      attachmentsPath: jobDir
+    });
+  } catch (error) {
+    console.error('Error downloading attachments:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Error downloading attachments', 
+      error: error.message 
+    });
+  }
+};
+
+module.exports = {
+  fetchAndProcessEmails,
+  downloadAttachments
+};

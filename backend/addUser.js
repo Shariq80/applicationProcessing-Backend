@@ -29,6 +29,4 @@ async function addUser(email, password) {
 const [email, password] = process.argv.slice(2);
 if (email && password) {
   addUser(email, password);
-} else {
-  console.log('Usage: node addUser.js <email> <password>');
 }

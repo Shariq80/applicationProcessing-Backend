@@ -10,11 +10,23 @@ const truncateText = (text, maxLength) => {
 
 const processResume = async (resumeText, jobDescription) => {
   try {
-    if (!resumeText || !resumeText.trim() || resumeText.startsWith('%PDF')) {
+    if (!resumeText || !resumeText.trim()) {
       console.log('Invalid resume text, unable to process');
       return {
         score: 0,
-        summary: "Unable to process the resume. The resume text is empty, invalid, or contains only PDF metadata.",
+        summary: "Unable to process the resume. The resume text is empty or invalid.",
+        missingSkills: []
+      };
+    }
+
+    // Remove any non-printable characters or PDF artifacts
+    resumeText = cleanText(resumeText);
+
+    if (resumeText.length < 50) {  // Adjust this threshold as needed
+      console.log('Resume text too short, might be invalid');
+      return {
+        score: 0,
+        summary: "The extracted resume text is too short. Please review the original document manually.",
         missingSkills: []
       };
     }
@@ -30,7 +42,6 @@ const processResume = async (resumeText, jobDescription) => {
       }
     }
 
-    console.log('Sending request to OpenAI');
     const cleanedResumeText = cleanText(resumeText);
     const truncatedResumeText = truncateText(cleanedResumeText, 3000); // Truncate to 3000 characters
     const prompt = `Analyze the following resume against the job description:
@@ -64,15 +75,11 @@ Ensure that you always provide a response in this format, even if the resume con
       temperature: 0.5,
     });
 
-    console.log('Received response from OpenAI');
-    console.log('Response:', JSON.stringify(response, null, 2));
 
     const analysis = response.choices[0].message.content;
     console.log('Analysis:', analysis);
 
     let [score, summary, missingSkills] = parseAnalysis(analysis);
-
-    console.log('Parsed analysis:', { score, summary, missingSkills });
 
     // Ensure summary is not empty
     if (!summary || summary.trim() === '') {
