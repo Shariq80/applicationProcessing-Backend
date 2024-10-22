@@ -1,6 +1,6 @@
 const express = require('express');
 const { protect } = require('../middleware/authMiddleware');
-const { getApplications, downloadAttachment } = require('../controllers/applicationController');
+const { getApplications, downloadAttachment, deleteApplication } = require('../controllers/applicationController');
 const { fetchAndProcessEmails } = require('../controllers/emailController');
 const Application = require('../models/Application');
 
@@ -32,5 +32,7 @@ router.get('/:id', async (req, res) => {
     res.status(500).json({ message: 'Error fetching application' });
   }
 });
+
+router.delete('/:applicationId', protect, deleteApplication);
 
 module.exports = router;

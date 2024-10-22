@@ -123,8 +123,7 @@ const fetchAndProcessEmails = async (req, res) => {
             userId: 'me',
             id: message.id,
             requestBody: {
-              addLabelIds: ['READ'],
-              removeLabelIds: ['INBOX', 'UNREAD']
+              removeLabelIds: ['UNREAD']
             }
           });
           console.log(`Marked email ${message.id} as processed`);

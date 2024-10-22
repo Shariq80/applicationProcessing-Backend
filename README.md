@@ -37,6 +37,7 @@ The system performs the following main functions:
 * `GET /api/applications/:id`: Get an application by ID
 * `POST /api/applications/:jobId/process-emails`: Process emails for a job
 * `GET /api/applications/:id/attachment/:attachmentId`: Download an attachment for an application
+* `DELETE /api/applications/:applicationId`: Delete an application
 
 ### Email Routes
 
