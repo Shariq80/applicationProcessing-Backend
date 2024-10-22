@@ -3,12 +3,12 @@ const Job = require('../models/Job');
 
 const getApplications = async (req, res) => {
   try {
-    const { jobId } = req.params;
-    const job = await Job.findById(jobId);
+    const { jobTitle } = req.params;
+    const job = await Job.findOne({ title: jobTitle });
     if (!job) {
       return res.status(404).json({ message: 'Job not found' });
     }
-    const applications = await Application.find({ job: jobId });
+    const applications = await Application.find({ job: job._id });
     res.json(applications);
   } catch (error) {
     res.status(500).json({ message: error.message });

@@ -6,9 +6,9 @@ const Application = require('../models/Application');
 
 const router = express.Router();
 
-router.get('/:jobId', protect, getApplications);
+router.get('/:jobTitle', protect, getApplications);
 router.put('/:id/status', protect, updateApplicationStatus);
-router.post('/:jobId/process-emails', protect, fetchAndProcessEmails);
+router.post('/:jobTitle/process-emails', protect, fetchAndProcessEmails);
 router.get('/:id/attachment/:attachmentId', protect, downloadAttachment);
 
 router.get('/', async (req, res) => {

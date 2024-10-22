@@ -21,8 +21,13 @@ const fetchOAuthCredentialsFromDB = async () => {
 
 const fetchAndProcessEmails = async (req, res) => {
   try {
-    const { jobId } = req.params;
+    const { jobTitle } = req.params;
     
+    const job = await Job.findOne({ title: jobTitle });
+    if (!job) {
+      return res.status(404).json({ message: 'Job not found' });
+    }
+
     const oauthCredentials = await fetchOAuthCredentialsFromDB();
 
     if (!oauthCredentials || !oauthCredentials.refreshToken) {
@@ -39,11 +44,6 @@ const fetchAndProcessEmails = async (req, res) => {
     });
 
     const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
-
-    const job = await Job.findById(jobId);
-    if (!job) {
-      throw new Error('Job not found');
-    }
 
     const response = await gmail.users.messages.list({
       userId: 'me',
@@ -142,7 +142,7 @@ const downloadAttachments = async (req, res) => {
     
     const job = await Job.findById(jobId);
     if (!job) {
-      return res.status(404).json({ success: false, message: 'Job not found' });
+      return res.status(404).json({ message: 'Job not found' });
     }
 
     const applications = await Application.find({ job: jobId });

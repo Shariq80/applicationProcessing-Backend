@@ -65,7 +65,7 @@ Missing Skills:
 Ensure that you always provide a response in this format, even if the resume content is unclear or incomplete.`;
 
     const response = await openai.chat.completions.create({
-      model: "gpt-3.5-turbo",
+      model: "gpt-4o-mini",
       messages: [
         { role: "system", content: "You are a helpful assistant that analyzes resumes." },
         { role: "user", content: prompt }

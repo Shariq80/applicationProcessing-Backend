@@ -9,8 +9,8 @@ router.get('/test', (req, res) => {
   res.json({ message: 'Email routes are working' });
 });
 
-router.post('/:jobId/process-emails', protect, fetchAndProcessEmails);
+router.post('/:jobTitle/process-emails', protect, fetchAndProcessEmails);
 
-router.get('/download-attachments/:jobId', downloadAttachments);
+router.get('/download-attachments/:jobTitle', downloadAttachments);
 
 module.exports = router;
