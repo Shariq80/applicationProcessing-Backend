@@ -33,11 +33,8 @@ const processResume = async (resumeText, jobDescription) => {
 
     const cachedAnalysis = getCachedAnalysis(resumeText, jobDescription);
     if (cachedAnalysis) {
-      console.log('Cached analysis found:', cachedAnalysis);
       if (cachedAnalysis.score === 0 && cachedAnalysis.summary === "No summary provided by AI. Please review the application manually.") {
-        console.log('Cached analysis is invalid, reprocessing');
       } else {
-        console.log('Using cached analysis');
         return cachedAnalysis;
       }
     }
@@ -77,13 +74,11 @@ Ensure that you always provide a response in this format, even if the resume con
 
 
     const analysis = response.choices[0].message.content;
-    console.log('Analysis:', analysis);
 
     let [score, summary, missingSkills] = parseAnalysis(analysis);
 
     // Ensure summary is not empty
     if (!summary || summary.trim() === '') {
-      console.log('Summary is empty, using default');
       summary = "No summary provided by AI. Please review the application manually.";
     }
 

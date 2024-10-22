@@ -19,7 +19,6 @@ const parseEmail = async (emailData, jobTitle, gmail, messageId) => {
     const extractedJobTitle = extractJobTitle(subject, jobTitle);
 
     if (!extractedJobTitle || !applicantEmail || applicantEmail.includes('noreply') || applicantEmail.includes('no-reply')) {
-      console.log(`Skipping email ${messageId}: Not a valid job application`);
       return null;
     }
 
@@ -52,10 +51,6 @@ const parseEmail = async (emailData, jobTitle, gmail, messageId) => {
 
       // Extract text from the attachment
       resumeText = await extractTextFromAttachment(resumeAttachment);
-      
-      if (!resumeText) {
-        console.log('Failed to extract text from attachment');
-      }
     }
 
     return {
@@ -138,7 +133,6 @@ const extractTextFromAttachment = async (attachment) => {
   const buffer = Buffer.from(attachment.data, 'base64');
   
   try {
-    console.log(`Attempting to extract text from ${attachment.filename} (${attachment.mimeType})`);
     let extractedText = '';
 
     if (attachment.mimeType === 'application/pdf') {
@@ -149,7 +143,6 @@ const extractTextFromAttachment = async (attachment) => {
       extractedText = result.value;
     } else if (attachment.mimeType === 'application/msword') {
       // For .doc files, you might need to use a different library or convert to .docx first
-      console.log('DOC file detected, extraction might be limited');
       extractedText = buffer.toString('utf8');
     } else {
       extractedText = buffer.toString('utf8');

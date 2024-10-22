@@ -33,7 +33,6 @@ const downloadAttachment = async (req, res) => {
       return res.status(404).json({ message: 'Attachment not found' });
     }
     
-    console.log(`Sending attachment: ${application.attachmentFilename}, ${application.attachmentContentType}`);
     res.set('Content-Type', application.attachmentContentType);
     res.set('Content-Disposition', `attachment; filename="${application.attachmentFilename}"`);
     res.send(application.attachmentData);
