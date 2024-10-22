@@ -34,24 +34,23 @@ const parseEmail = async (emailData, jobTitle, gmail, messageId) => {
     }
 
 
+    let resumeAttachment = null;
+    if (emailData.payload.parts) {
+      attachments = await extractAttachments(emailData.payload.parts, gmail, messageId);
+      resumeAttachment = findResumeAttachment(attachments);
+    }
+
     let resumeText = '';
     let attachmentFilename = '';
-    const resumeAttachment = findResumeAttachment(attachments);
+    let attachmentData = null;
+    let attachmentContentType = '';
+
     if (resumeAttachment && resumeAttachment.data) {
       attachmentFilename = resumeAttachment.filename;
-      
-      // Save the attachment to a local directory
-      const attachmentsDir = path.join(__dirname, '..', 'attachments');
-      if (!fs.existsSync(attachmentsDir)) {
-        fs.mkdirSync(attachmentsDir);
-      }
-      const filePath = path.join(attachmentsDir, `${messageId}_${resumeAttachment.filename}`);
-      fs.writeFileSync(filePath, Buffer.from(resumeAttachment.data, 'base64'));
-      
-      // Store the filename in the parsed email data
-      attachmentFilename = resumeAttachment.filename;
-      
-      // Extract text from the saved PDF
+      attachmentData = Buffer.from(resumeAttachment.data, 'base64');
+      attachmentContentType = resumeAttachment.mimeType;
+
+      // Extract text from the attachment
       resumeText = await extractTextFromAttachment(resumeAttachment);
       
       if (!resumeText) {
@@ -59,21 +58,14 @@ const parseEmail = async (emailData, jobTitle, gmail, messageId) => {
       }
     }
 
-    if (!resumeText && emailBody && emailBody.trim().length > 0) {
-      console.log('Using email body as resume text');
-      resumeText = emailBody;
-    }
-
-    if (!resumeText) {
-      console.log('No valid resume text found in attachment or email body');
-      return null;
-    }
-
     return {
       applicantEmail,
-      resumeText,
       extractedJobTitle,
-      attachmentFilename
+      resumeText,
+      attachmentFilename,
+      attachmentData,
+      attachmentContentType,
+      emailId: messageId
     };
   } catch (error) {
     console.error('Error parsing email:', error);

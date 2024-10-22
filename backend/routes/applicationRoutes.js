@@ -1,6 +1,6 @@
 const express = require('express');
 const { protect } = require('../middleware/authMiddleware');
-const { getApplications, downloadAttachment, deleteApplication } = require('../controllers/applicationController');
+const { getApplications, downloadAttachment, deleteApplication, parseResume } = require('../controllers/applicationController');
 const { fetchAndProcessEmails } = require('../controllers/emailController');
 const Application = require('../models/Application');
 
@@ -34,5 +34,7 @@ router.get('/:id', async (req, res) => {
 });
 
 router.delete('/:applicationId', protect, deleteApplication);
+
+router.post('/:id/parse-resume', protect, parseResume);
 
 module.exports = router;

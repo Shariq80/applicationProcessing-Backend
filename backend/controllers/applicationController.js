@@ -20,7 +20,7 @@ const getApplications = async (req, res) => {
 
 const downloadAttachment = async (req, res) => {
   try {
-    const { id, attachmentId } = req.params;
+    const { id } = req.params;
     const application = await Application.findById(id);
     
     if (!application) {
@@ -28,17 +28,15 @@ const downloadAttachment = async (req, res) => {
       return res.status(404).json({ message: 'Application not found' });
     }
     
-    const attachment = application.attachments.id(attachmentId);
-    
-    if (!attachment) {
+    if (!application.attachmentData) {
       console.log('Attachment not found');
       return res.status(404).json({ message: 'Attachment not found' });
     }
     
-    console.log(`Sending attachment: ${attachment.filename}, ${attachment.contentType}`);
-    res.set('Content-Type', attachment.contentType);
-    res.set('Content-Disposition', `attachment; filename="${attachment.filename}"`);
-    res.send(attachment.data);
+    console.log(`Sending attachment: ${application.attachmentFilename}, ${application.attachmentContentType}`);
+    res.set('Content-Type', application.attachmentContentType);
+    res.set('Content-Disposition', `attachment; filename="${application.attachmentFilename}"`);
+    res.send(application.attachmentData);
   } catch (error) {
     console.error('Error downloading attachment:', error);
     res.status(500).json({ message: error.message });
@@ -80,4 +78,37 @@ const deleteApplication = async (req, res) => {
   }
 };
 
-module.exports = { getApplications, downloadAttachment, deleteApplication };
+const parseResume = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const application = await Application.findById(id);
+    
+    if (!application) {
+      return res.status(404).json({ message: 'Application not found' });
+    }
+
+    if (!application.attachmentData) {
+      return res.status(400).json({ message: 'No attachment found for this application' });
+    }
+
+    const resumeText = await extractTextFromAttachment({
+      data: application.attachmentData.toString('base64'),
+      mimeType: application.attachmentContentType,
+      filename: application.attachmentFilename
+    });
+
+    if (!resumeText) {
+      return res.status(500).json({ message: 'Failed to extract text from the resume' });
+    }
+
+    application.resumeText = resumeText;
+    await application.save();
+
+    res.json({ message: 'Resume parsed successfully', resumeText });
+  } catch (error) {
+    console.error('Error parsing resume:', error);
+    res.status(500).json({ message: error.message });
+  }
+};
+
+module.exports = { getApplications, downloadAttachment, deleteApplication, parseResume };

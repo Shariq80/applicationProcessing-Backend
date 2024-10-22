@@ -111,3 +111,11 @@ Handles CRUD operations for applications. Key functions include:
 - Optimize database queries and implement caching where appropriate.
 - Add support for multiple languages in resume processing.
 - Implement a feedback mechanism to improve AI-based resume scoring over time.
+
+## File Size Limitations
+
+When storing resume attachments in MongoDB, please note the following:
+
+- MongoDB has a document size limit of 16MB. This includes all fields in the document, including the resume attachment.
+- It's recommended to keep resume file sizes under 5MB to ensure smooth operation and storage.
+- If larger file sizes are consistently needed, consider using GridFS for storing files over 16MB or implementing a separate file storage solution.

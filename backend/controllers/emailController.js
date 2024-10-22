@@ -109,6 +109,8 @@ const fetchAndProcessEmails = async (req, res) => {
           summary: processedResult.summary,
           missingSkills: processedResult.missingSkills,
           attachmentFilename: parsedEmail.attachmentFilename,
+          attachmentData: parsedEmail.attachmentData,
+          attachmentContentType: parsedEmail.attachmentContentType,
           job: job._id,
           emailId: message.id
         });

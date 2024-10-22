@@ -6,8 +6,9 @@ const ApplicationSchema = new mongoose.Schema({
   resumeText: String,
   score: Number,
   summary: String,
-  missingSkills: [String],
   attachmentFilename: String,
+  attachmentData: Buffer,
+  attachmentContentType: String,
   job: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Job'
