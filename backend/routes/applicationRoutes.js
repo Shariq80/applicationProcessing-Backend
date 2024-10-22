@@ -1,13 +1,12 @@
 const express = require('express');
 const { protect } = require('../middleware/authMiddleware');
-const { getApplications, updateApplicationStatus, downloadAttachment } = require('../controllers/applicationController');
+const { getApplications, downloadAttachment } = require('../controllers/applicationController');
 const { fetchAndProcessEmails } = require('../controllers/emailController');
 const Application = require('../models/Application');
 
 const router = express.Router();
 
 router.get('/:jobTitle', protect, getApplications);
-router.put('/:id/status', protect, updateApplicationStatus);
 router.post('/:jobTitle/process-emails', protect, fetchAndProcessEmails);
 router.get('/:id/attachment/:attachmentId', protect, downloadAttachment);
 

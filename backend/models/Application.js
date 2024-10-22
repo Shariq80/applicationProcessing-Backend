@@ -7,11 +7,6 @@ const ApplicationSchema = new mongoose.Schema({
   score: Number,
   summary: String,
   missingSkills: [String],
-  status: {
-    type: String,
-    enum: ['Pending', 'Rejected', 'Shortlisted'],
-    default: 'Pending'
-  },
   attachmentFilename: String,
   job: {
     type: mongoose.Schema.Types.ObjectId,
