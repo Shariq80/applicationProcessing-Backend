@@ -20,17 +20,23 @@ const fetchOAuthCredentialsFromDB = async () => {
 };
 
 const fetchAndProcessEmails = async (req, res) => {
+  console.log('Starting fetchAndProcessEmails function');
   try {
     const { jobTitle } = req.params;
+    console.log(`Processing emails for job title: ${jobTitle}`);
     
     const job = await Job.findOne({ title: jobTitle });
     if (!job) {
+      console.log(`Job not found for title: ${jobTitle}`);
       return res.status(404).json({ message: 'Job not found' });
     }
+    console.log(`Found job: ${job._id}`);
 
     const oauthCredentials = await fetchOAuthCredentialsFromDB();
+    console.log('OAuth credentials fetched');
 
     if (!oauthCredentials || !oauthCredentials.refreshToken) {
+      console.log('No valid OAuth credentials found');
       throw new Error('No valid OAuth credentials found');
     }
 
@@ -44,6 +50,7 @@ const fetchAndProcessEmails = async (req, res) => {
     });
 
     const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
+    console.log('Gmail client initialized');
 
     const response = await gmail.users.messages.list({
       userId: 'me',
@@ -51,25 +58,34 @@ const fetchAndProcessEmails = async (req, res) => {
     });
 
     const messages = response.data.messages || [];
+    console.log(`Found ${messages.length} unread messages`);
+
     const processedApplications = [];
     const skippedEmails = [];
 
     for (const message of messages) {
+      console.log(`Processing message: ${message.id}`);
       try {
         const email = await gmail.users.messages.get({
           userId: 'me',
           id: message.id,
         });
-        const { applicantEmail, resumeText, extractedJobTitle, attachmentFilename } = parsedEmail;
+        console.log(`Fetched email details for message: ${message.id}`);
 
-        if (!resumeText || resumeText.trim().length === 0) {
+        const parsedEmail = await parseEmail(email.data, jobTitle, gmail, message.id);
+        console.log(`Parsed email: ${JSON.stringify(parsedEmail)}`);
+
+        if (!parsedEmail || !parsedEmail.resumeText || parsedEmail.resumeText.trim().length === 0) {
+          console.log(`Skipping email ${message.id}: No valid resume text`);
           skippedEmails.push(message.id);
           continue;
         }
 
         let processedResult;
         try {
-          processedResult = await processResume(resumeText, job.description);
+          console.log(`Processing resume with OpenAI for email: ${message.id}`);
+          processedResult = await processResume(parsedEmail.resumeText, job.description);
+          console.log(`OpenAI processing result: ${JSON.stringify(processedResult)}`);
         } catch (openaiError) {
           console.error('Error processing resume with OpenAI:', openaiError);
           processedResult = {
@@ -81,21 +97,24 @@ const fetchAndProcessEmails = async (req, res) => {
 
         const existingApplication = await Application.findOne({ emailId: message.id });
         if (existingApplication) {
+          console.log(`Application already exists for email: ${message.id}`);
           continue;
         }
 
         const application = new Application({
-          applicantEmail,
-          jobTitle: extractedJobTitle,
-          resumeText,
+          applicantEmail: parsedEmail.applicantEmail,
+          jobTitle: parsedEmail.extractedJobTitle,
+          resumeText: parsedEmail.resumeText,
           score: processedResult.score,
           summary: processedResult.summary,
           missingSkills: processedResult.missingSkills,
-          attachmentFilename: attachmentFilename,
-          job: job._id
+          attachmentFilename: parsedEmail.attachmentFilename,
+          job: job._id,
+          emailId: message.id
         });
 
         await application.save();
+        console.log(`Saved new application for email: ${message.id}`);
         processedApplications.push(application);
 
         // Mark the email as processed
@@ -104,10 +123,11 @@ const fetchAndProcessEmails = async (req, res) => {
             userId: 'me',
             id: message.id,
             requestBody: {
-              addLabelIds: ['PROCESSED'],
+              addLabelIds: ['READ'],
               removeLabelIds: ['INBOX', 'UNREAD']
             }
           });
+          console.log(`Marked email ${message.id} as processed`);
         } catch (modifyError) {
           console.error(`Error modifying email ${message.id}:`, modifyError);
           skippedEmails.push({ id: message.id, reason: 'Email modification failed' });
@@ -117,6 +137,9 @@ const fetchAndProcessEmails = async (req, res) => {
         skippedEmails.push(message.id);
       }
     }
+
+    console.log(`Processed ${processedApplications.length} applications`);
+    console.log(`Skipped ${skippedEmails.length} emails`);
 
     res.json({ 
       success: true, 
