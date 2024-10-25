@@ -9,6 +9,11 @@ const fs = require('fs');
 const path = require('path');
 const sanitize = require('sanitize-filename');
 
+const extractApplicantName = (from) => {
+  const match = from.match(/^"?(.+?)"?\s*<.+>/);
+  return match ? match[1] : from.split('@')[0];
+};
+
 const parseEmail = async (emailData, jobTitle, gmail, messageId) => {
   try {
     const headers = emailData.payload.headers;
@@ -16,6 +21,7 @@ const parseEmail = async (emailData, jobTitle, gmail, messageId) => {
     const subject = headers.find(header => header.name.toLowerCase() === 'subject').value;
 
     const applicantEmail = extractEmail(from);
+    const applicantName = extractApplicantName(from);
     const extractedJobTitle = extractJobTitle(subject, jobTitle);
 
     if (!extractedJobTitle || !applicantEmail || applicantEmail.includes('noreply') || applicantEmail.includes('no-reply')) {
@@ -55,6 +61,7 @@ const parseEmail = async (emailData, jobTitle, gmail, messageId) => {
 
     return {
       applicantEmail,
+      applicantName,
       extractedJobTitle,
       resumeText,
       attachmentFilename,

@@ -88,6 +88,7 @@ const fetchAndProcessEmails = async (req, res) => {
 
         const application = new Application({
           applicantEmail: parsedEmail.applicantEmail,
+          applicantName: parsedEmail.applicantName,
           jobTitle: parsedEmail.extractedJobTitle,
           resumeText: parsedEmail.resumeText,
           score: processedResult.score,
@@ -97,7 +98,8 @@ const fetchAndProcessEmails = async (req, res) => {
           attachmentData: parsedEmail.attachmentData,
           attachmentContentType: parsedEmail.attachmentContentType,
           job: job._id,
-          emailId: message.id
+          emailId: message.id,
+          receivedDate: new Date(parseInt(email.data.internalDate))
         });
 
         await application.save();

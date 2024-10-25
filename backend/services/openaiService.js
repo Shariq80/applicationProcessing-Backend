@@ -41,7 +41,7 @@ const processResume = async (resumeText, jobDescription) => {
 
     const cleanedResumeText = cleanText(resumeText);
     const truncatedResumeText = truncateText(cleanedResumeText, 3000); // Truncate to 3000 characters
-    const prompt = `Analyze the following resume against the job description and provide a score and summary and missing skills after analysis:
+    const prompt = `Analyze the following resume against the job description and provide a score indicating the suitability of the resume to the job description and summary after analysis:
 
 Job Description:
 ${jobDescription}
@@ -54,10 +54,7 @@ If the resume text appears to be unreadable or contains non-text content, please
 Provide a response in the following format:
 Score: [single digit numeric score from 1 to 10]
 Summary: [2 line summary of the candidate's fit with the job description]
-Missing Skills:
-- [skill 1]
-- [skill 2]
-- [skill 3]
+
 
 Ensure that you always provide a response in this format, even if the resume content is unclear or incomplete.`;
 
