@@ -15,7 +15,8 @@ const ApplicationSchema = new mongoose.Schema({
     ref: 'Job'
   },
   emailId: { type: String, unique: true },
-  receivedDate: { type: Date, default: Date.now }
+  receivedDate: { type: Date, default: Date.now },
+  emailBody: String
 }, { timestamps: true });
 
 module.exports = mongoose.model('Application', ApplicationSchema);

@@ -10,7 +10,7 @@ const getApplications = async (req, res) => {
     if (!job) {
       return res.status(404).json({ message: 'Job not found' });
     }
-    const applications = await Application.find({ job: job._id });
+    const applications = await Application.find({ job: job._id }).select('applicantName applicantEmail score summary emailBody receivedDate attachmentFilename');
     res.json(applications);
   } catch (error) {
     res.status(500).json({ message: error.message });

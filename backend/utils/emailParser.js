@@ -67,7 +67,8 @@ const parseEmail = async (emailData, jobTitle, gmail, messageId) => {
       attachmentFilename,
       attachmentData,
       attachmentContentType,
-      emailId: messageId
+      emailId: messageId,
+      emailBody
     };
   } catch (error) {
     console.error('Error parsing email:', error);

@@ -99,7 +99,8 @@ const fetchAndProcessEmails = async (req, res) => {
           attachmentContentType: parsedEmail.attachmentContentType,
           job: job._id,
           emailId: message.id,
-          receivedDate: new Date(parseInt(email.data.internalDate))
+          receivedDate: new Date(parseInt(email.data.internalDate)),
+          emailBody: parsedEmail.emailBody // Add this line
         });
 
         await application.save();
